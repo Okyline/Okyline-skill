@@ -1,14 +1,19 @@
 ---
 name: okyline
-description: |
-  Okyline schema design. Use when creating, editing JSON schemas using the Okyline language - an example-driven schema language where constraints are expressed inline on field names. Triggers: "okyline schema", "write an okyline", "JSON validation schema", "example-driven schema", or when user uploads/references .oky files or mentions $oky syntax.
+description: >
+  Expert assistant for the Okyline schema language. Okyline enables JSON data 
+  validation by example, where constraints are expressed inline on field names. 
+  Use when creating, editing, or converting JSON Schema, Avro, or other schema 
+  formats to Okyline, or when answering questions about Okyline syntax and features.
+  This skill should be triggered whenever the user mentions Okyline, references 
+  .oky files, or asks about example-driven JSON schema validation.
 ---
 
 # Okyline Schema Language v1.1.0
 
 Okyline is a declarative language for describing and validating JSON structures using inline constraints on field names. Schemas are valid JSON documents with real example values.
 
-# Okyline skill version : 1.5.1
+# Okyline skill version : 1.6.0
 
 ## ⚠️ Before any schema generation
 
@@ -393,3 +398,10 @@ For detailed syntax and features, consult these references:
     "LigneTTC": "montantTTC >= 0 && montantTTC == montantNetHT + montantTVA"
   }
 ```
+
+## ⚠️ Erreurs silencieuses (pas d'erreur syntaxe, mais problème à la validation)
+
+- [ ] Décimales en `.00` → `"150.00"` (sinon inféré comme Integer)
+- [ ] Exemple `null` → impossible d'inférer le type
+- [ ] Tableau vide `[]` → impossible d'inférer le type des éléments
+- [ ] `"champ|Label"` → "Label" interprété comme contrainte (utiliser `"champ| |Label"`)
