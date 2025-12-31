@@ -67,14 +67,17 @@ Claude will automatically invoke this skill when relevant.
 
 ```
 okyline-skill/
-├── SKILL.md                              # Main skill instructions
-├── marketplace.json                      # Metadata for skill marketplaces
+├── README.md                             # This file
 ├── LICENSE                               # Apache 2.0
-└── references/
-    ├── syntax-reference.md               # Complete constraint syntax
-    ├── internal-references.md            # $defs and $ref usage
-    ├── conditional-directives.md         # Conditional logic
-    └── expression-language.md            # $compute expressions
+└── skills/
+    └── okyline/
+        ├── SKILL.md                      # Main skill instructions
+        ├── package.json                  # Skill metadata
+        └── references/
+            ├── syntax-reference.md       # Complete constraint syntax
+            ├── internal-references.md    # $defs and $ref usage
+            ├── conditional-directives.md # Conditional logic
+            └── expression-language.md    # $compute expressions
 ```
 
 ## Example

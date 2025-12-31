@@ -13,7 +13,7 @@ description: >
 
 Okyline is a declarative language for describing and validating JSON structures using inline constraints on field names. Schemas are valid JSON documents with real example values.
 
-# Okyline skill version : 1.6.0
+# Okyline skill version : 1.6.1
 
 ## ⚠️ Before any schema generation
 
