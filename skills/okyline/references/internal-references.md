@@ -449,3 +449,50 @@ For `"$ref": ["&A", "&B", "&C"]`:
 | Remove field | `"$remove": ["field"]` | Exclude inherited field |
 | Keep on conflict | `"$keep": ["&A.field"]` | Choose which version to keep |
 | Override field | `"field \| $override ..."` | Replace inherited definition |
+
+---
+
+## Template Pattern — $ref + $override in Array Elements
+
+A powerful pattern for typed structures that share a common base but need per-usage specialization. The `$ref` is placed inside the array element object, not on the array field itself.
+
+**Use case:** FHIR `Coding` — same structure everywhere, but `code` has different enum constraints per usage.
+
+```json
+{
+  "$oky": {
+    "maritalStatus": {
+      "coding|[*]": [{
+        "$ref": "&Coding",
+        "code|$override @ ($MARITAL_STATUS)|Code": "M"
+      }]
+    },
+    "gender": {
+      "coding|[*]": [{
+        "$ref": "&Coding",
+        "code|$override @ ($GENDER)|Code": "male"
+      }]
+    }
+  },
+  "$defs": {
+    "Coding": {
+      "system|@ ~$Uri~|System": "http://example.org",
+      "code|@ {1,50}|Code": "example",
+      "display|{1,100}|Display": "Example"
+    }
+  }
+}
+```
+
+**Key points:**
+- `system` and `display` inherited from `&Coding` — validated once, applied everywhere
+- Only `code` is overridden per usage to add the specific enum constraint
+- The array field `coding|[*]` is a normal array — inheritance happens at element level
+- Multiple fields can be overridden if needed
+
+**Property-level `$ref` vs object-level `$ref` — when to use which:**
+
+| Pattern | Use when |
+|---------|----------|
+| `"period\|$ref\|": "&Period"` | The field IS a Period — no specialization needed |
+| `{ "$ref": "&Coding", "code\|$override ...": ... }` | The object EXTENDS a base — needs per-usage specialization |

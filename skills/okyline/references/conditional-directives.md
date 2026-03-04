@@ -232,6 +232,48 @@ Type Guards check the **runtime type** of a field value in conditions.
 
 ---
 
+## Structural Group Directives
+
+These directives constrain which fields from a group must be present, without conditions.
+
+| Directive | Meaning |
+|-----------|---------|
+| `$atLeastOne` | At least one field from the group must be present |
+| `$mutuallyExclusive` | At most one field from the group may be present |
+| `$exactlyOne` | Exactly one field from the group must be present |
+| `$allOrNone` | All fields present, or none |
+
+```json
+{
+  "$oky": {
+    "email": "user@example.com",
+    "phone": "+33612345678",
+    "deceasedBoolean": false,
+    "deceasedDateTime": "2025-01-15T10:00:00Z",
+    "street": "12 rue de la Paix",
+    "city": "Paris",
+    "zip": "75001",
+
+    "$atLeastOne": ["email", "phone"],
+    "$mutuallyExclusive": ["deceasedBoolean", "deceasedDateTime"],
+    "$allOrNone": ["street", "city", "zip"]
+  }
+}
+```
+
+> **Suffix mechanism:** To declare multiple independent groups of the same directive in one object, append a unique suffix after `_`. The suffix is semantically ignored.
+
+```json
+"$mutuallyExclusive_deceased": ["deceasedBoolean", "deceasedDateTime"],
+"$mutuallyExclusive_birth": ["multipleBirthBoolean", "multipleBirthInteger"],
+"$exactlyOne_diagnosis": ["diagnosisCodeableConcept", "diagnosisReference"],
+"$exactlyOne_procedure": ["procedureCodeableConcept", "procedureReference"]
+```
+
+Note: `$exactlyOne` is a required `$mutuallyExclusive` — at most one, and at least one.
+
+---
+
 ## Combining Conditional Directives
 
 ```json
@@ -274,3 +316,35 @@ Type Guards check the **runtime type** of a field value in conditions.
 **Type conditions:**
 - `fieldName(_TypeGuard_)` - type check
 - `fieldName(_Type1_,_Type2_)` - multiple types (OR)
+
+---
+
+## Path Expressions
+
+Conditions can reference fields outside the current object using path prefixes:
+
+| Prefix | Resolves from |
+|--------|---------------|
+| *(none)* | Current object |
+| `this.` | Current object (explicit) |
+| `parent.` | Nearest parent object (skips arrays) |
+| `root.` | Document root |
+
+**Note:** `parent` skips over arrays — it always refers to the nearest parent **object**, not the array containing the current item.
+
+```json
+// No prefix — current object (default)
+"$requiredIf status('ACTIVE')": ["workDays"]
+
+// parent. — condition on the object containing this array
+"items|[*]": [{
+  "code": "ABC",
+  "$requiredIf parent.type('DETAILED')": ["description"]
+}]
+
+// root. — condition on the document root
+"$requiredIf root.accountType('BUSINESS')": ["taxId"]
+
+// this. — explicit current object (same as no prefix, useful for clarity)
+"$requiredIf this.role('ADMIN')": ["accessLevel"]
+```

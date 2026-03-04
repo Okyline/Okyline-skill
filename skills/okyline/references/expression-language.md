@@ -20,6 +20,22 @@ The expression language is used in `$compute` blocks for business rules, cross-f
 **Reference compute in validation:** `|(%ComputeName)`
 **Reference compute in expression:** `%ComputeName`
 
+## Context Rule
+
+A `$compute` expression is always evaluated in the context of the **object that directly contains the annotated field**. All properties of that object are accessible — including sibling arrays and nested objects.
+
+```json
+// The annotated field is inside a line item — context = the current element
+"lignes|[*]": [{
+  "quantite": 5,
+  "prix": 100.0,
+  "montantHT|(%Check)": 500.0
+}],
+"$compute": { "Check": "montantHT == quantite * prix" }
+```
+
+> The same rule applies at any depth. When the annotated field is at the root, the containing object is the document root — all root-level arrays and fields are accessible.
+
 ---
 
 ## Operators
