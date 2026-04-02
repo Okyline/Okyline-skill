@@ -10,7 +10,7 @@ Conditional directives apply structural changes based on field values or existen
 | `$requiredIfExist` / `$requiredIfNotExist` | Field existence | Make fields required |
 | `$forbiddenIf` / `$forbiddenIfNot` | Field value | Forbid fields |
 | `$forbiddenIfExist` / `$forbiddenIfNotExist` | Field existence | Forbid fields |
-| `$appliedIf` / `$appliedIfNot` | Field value | Add structure (if/switch) |
+| `$appliedIf` | Field value | Add structure (if/switch) |
 | `$appliedIfExist` / `$appliedIfNotExist` | Field existence | Add structure |
 
 ---
@@ -64,15 +64,17 @@ Conditional directives apply structural changes based on field values or existen
 
 ### `$appliedIf` - Simple If/Else
 
+`$else` is always **nested inside** the `$appliedIf` payload:
+
 ```json
 {
   "$oky": {
     "status|@ ('ACTIVE','ON_LEAVE')": "ACTIVE",
     "$appliedIf status('ACTIVE')": {
-      "workDays|@ (1..22)": 20
-    },
-    "$else": {
-      "leaveReason|@": "Vacation"
+      "workDays|@ (1..22)": 20,
+      "$else": {
+        "leaveReason|@": "Vacation"
+      }
     }
   }
 }
@@ -98,11 +100,43 @@ Conditional directives apply structural changes based on field values or existen
       },
       "$else": {
         "note|@": "Unknown payment method"
+      },
+      "$notExist": {
+        "fallback|@": "No payment method provided"
       }
     }
   }
 }
 ```
+
+**Special branches in switch-case:**
+
+| Branch | Triggers when |
+|--------|---------------|
+| `$else` | Trigger field exists but matches no listed branch |
+| `$notExist` | Trigger field is **absent** from the validated data |
+
+`$else` and `$notExist` are independent: absent field triggers only `$notExist`, unmatched value triggers only `$else`.
+
+---
+
+## Null Literal in Conditions
+
+The `null` literal can be used in value-based conditions to test if a field's value is null:
+
+```json
+"$requiredIf status('CANCELLED', null)": ["reason"]
+```
+- `reason` required when `status` is `'CANCELLED'` OR `null`
+
+```json
+"$requiredIfNot config(null)": ["configLabel"]
+```
+- `configLabel` required when `config` is NOT null
+
+**Rules:**
+- `null` can be mixed with other values (OR logic)
+- Only allowed in value-based conditions, not as field constraints
 
 ---
 

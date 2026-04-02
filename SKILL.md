@@ -1,19 +1,17 @@
 ---
 name: okyline
 description: >
-  Expert assistant for the Okyline schema language. Okyline enables JSON data 
-  validation by example, where constraints are expressed inline on field names. 
-  Use when creating, editing, or converting JSON Schema, Avro, or other schema 
-  formats to Okyline, or when answering questions about Okyline syntax and features.
-  This skill should be triggered whenever the user mentions Okyline, references 
-  .oky files, or asks about example-driven JSON schema validation.
+  Expert assistant for the Okyline schema language — create, edit, and convert
+  JSON validation schemas using declarative, example-driven syntax with inline constraints.
+metadata:
+  version: "2.0.0"
+  author: Okyline
+  repository: Okyline/Okyline-skill
 ---
 
-# Okyline Schema Language v1.3.0
+# Okyline Schema Language v1.4.0
 
 Okyline is a declarative language for describing and validating JSON structures using inline constraints on field names. Schemas are valid JSON documents with real example values.
-
-# Okyline skill version : 1.7.0
 
 ## ⚠️ Before any schema generation
 
@@ -23,6 +21,7 @@ Okyline is a declarative language for describing and validating JSON structures 
 2. `references/internal-references.md` — $defs and $ref
 3. `references/conditional-directives.md` — if conditional logic
 4. `references/expression-language.md` — if $compute is necessary
+5. `references/virtual-fields.md` — if $field (virtual fields) is necessary
 
 Never generate a schema based solely on this SKILL.md file.
 The examples here are a summary, not an exhaustive reference.
@@ -84,40 +83,40 @@ If a label is present without constraints, use `| |`:
 | `$ref` | Reference to definition (type indicator, not a validation constraint) | `"address\|$ref": "&Address"` |
 
 
-### Contraintes numériques ouvertes
+### Open-ended numeric constraints
 
-Quand une seule borne est nécessaire, utiliser les opérateurs de comparaison :
+When only one bound is needed, use comparison operators:
 
-| Syntaxe | Signification | Exemple |
-|---------|---------------|---------|
-| `(>0)` | Strictement positif | `"quantity\|(>0)": 5` |
-| `(>=0)` | Positif ou zéro | `"price\|(>=0)": 29.99` |
-| `(<100)` | Strictement < 100 | `"percentage\|(<100)": 50` |
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `(>0)` | Strictly positive | `"quantity\|(>0)": 5` |
+| `(>=0)` | Positive or zero | `"price\|(>=0)": 29.99` |
+| `(<100)` | Strictly < 100 | `"percentage\|(<100)": 50` |
 | `(<=100)` | ≤ 100 | `"score\|(<=100)": 85` |
 
-❌ Ne jamais inventer de syntaxe avec borne manquante : `(0..)`, `(..100)`
-✅ Utiliser les comparaisons : `(>=0)`, `(<=100)`
+❌ Never invent syntax with missing bound: `(0..)`, `(..100)`
+✅ Use comparisons: `(>=0)`, `(<=100)`
 
-❌ Ne jamais inventer borne manquante : `(0..99999999)`, `(-99999999..100)`
-✅ Utiliser les comparaisons : `(>=0)`, `(<=100)`
+❌ Never use huge placeholder bounds: `(0..99999999)`, `(-99999999..100)`
+✅ Use comparisons: `(>=0)`, `(<=100)`
 
 
 ⚠️ **INVALID SYNTAX** — Okyline does NOT support open ranges:
 - ❌ `(0..)`, `(..100)`, `(1..*)`, `(0..*)`
 - These will cause validation errors
 
-### Taille de collection illimitée
+### Unbounded collection size
 
-Utiliser `*` pour indiquer "pas de limite" :
+Use `*` to indicate "no limit":
 
-| Syntaxe | Signification |
-|---------|---------------|
-| `[*]` | Tableau sans contrainte de taille |
-| `[1,*]` | Au moins 1 élément, pas de maximum |
-| `[~pattern~:*]` | Map avec clés validées, nombre d'entrées illimité |
+| Syntax | Meaning |
+|--------|---------|
+| `[*]` | Array with no size constraint |
+| `[1,*]` | At least 1 element, no maximum |
+| `[~pattern~:*]` | Map with validated keys, unlimited entries |
 
-❌ Ne jamais omettre une borne : `[1,]`, `[~pattern~:]`
-✅ Utiliser `*` explicitement : `[1,*]`, `[~pattern~:*]`
+❌ Never omit a bound: `[1,]`, `[~pattern~:]`
+✅ Use `*` explicitly: `[1,*]`, `[~pattern~:*]`
 
 
 ## Built-in Formats
@@ -295,21 +294,54 @@ Multiple inheritance: `"$ref": ["&Auditable", "&Deletable"]`
 | `$override` | `"field \| $override ...": value` | Replace inherited definition |
 | `$keep` | `"$keep": ["&A.field"]` | Resolve collision in multiple inheritance |
 
+## Choosing the Right Conditional Mechanism
+
+| Need | Mechanism | Example |
+|------|-----------|---------|
+| Field A required when field B has a specific value | `$requiredIf` | `"$requiredIf status('ACTIVE')": ["email"]` |
+| Field A forbidden when field B has a specific value | `$forbiddenIf` | `"$forbiddenIf status('CLOSED')": ["lastLogin"]` |
+| Field A required when field B exists/is absent | `$requiredIfExist` / `$requiredIfNotExist` | `"$requiredIfExist shipping": ["address"]` |
+| Different fields depending on a value | `$appliedIf` switch | `"$appliedIf paymentMethod": { "('CARD')": {...}, "('PAYPAL')": {...} }` |
+| Extra fields when a condition is met | `$appliedIf` simple | `"$appliedIf status('ACTIVE')": { "workDays\|@": 20 }` |
+| Exactly one field among N must be present | `$exactlyOne` | `"$exactlyOne": ["email", "phone"]` |
+| At most one field among N | `$mutuallyExclusive` | `"$mutuallyExclusive": ["optionA", "optionB"]` |
+| At least one field among N | `$atLeastOne` | `"$atLeastOne": ["email", "phone", "fax"]` |
+| All or none of a group | `$allOrNone` | `"$allOrNone": ["street", "city", "zip"]` |
+| Condition based on a computed/derived value | `$field` + `$appliedIf` | `"$field tier": "%ComputeTier"` then `"$appliedIf tier('GOLD')": {...}` |
+| Validation depends on field's runtime type | Type Guard | `"$appliedIf data(_String_)": {...}` |
+| Condition on null value | Null literal | `"$requiredIf status(null)": ["fallback"]` |
+
+## `$compute` vs `$field`
+
+Use `$compute` alone to validate field values against business rules (`"total|(%CheckTotal)": 120.0`).
+
+Introduce `$field` only when a conditional directive needs a **derived value not present in the data** (e.g., a computed tier, classification, or flag). If the condition can reference an existing field directly, don't use `$field`.
+
 ## $compute Context Rules
 
 Expressions in `$compute` must be **attached to a field** using `|(%ComputeName)` syntax. The expression is evaluated in the context of the **object that directly contains the annotated field** — all properties of that object are accessible, including sibling arrays.
 
+**Path resolution:** `parent` always refers to the parent of the evaluation context. Context fields are accessed directly (no prefix needed), so `parent` is always one level up from the context. Use `parent.parent` to go two levels up, or `root` to reach the document root directly. Use `this.` to disambiguate when a field name collides with a reserved keyword (`parent`, `root`, `prev`, `next`, `first`, `last`, `origin`).
+
 See `references/expression-language.md` for full details and examples.
 
-## Schema Design Workflow
+## Schema Validation Checklist
 
-1. Start with `{"$oky": { ... }}`
-2. Write example JSON with realistic values
-3. Add `@` to required fields
-4. Add constraints progressively: length, range, format, enums
-5. Add conditional logic if needed (`$appliedIf`, `$requiredIf`)
-6. Add computed validations if needed (`$compute`)
-7. Identify repeated structures → extract to `$defs` with `$ref`
+Before delivering a schema, verify:
+
+- [ ] `$oky` wrapper present
+- [ ] All required fields marked with `@`
+- [ ] No `?` on fields that are simply optional (use `?` only for intentional null)
+- [ ] No `null` example values — use a real example with `?` if nullable
+- [ ] No empty arrays `[]` — at least one element for type inference
+- [ ] Decimals ending in .00 quoted as strings (`"78.00"` not `78.00`)
+- [ ] Element constraints use `->` (not applied directly to array field)
+- [ ] `$ref` before `->`, never after
+- [ ] `$compute` expressions attached to fields with `|(%Name)`
+- [ ] No two `(...)` constraint blocks on the same field
+- [ ] Labels use `| |Label` syntax (not `|Label`)
+- [ ] `$id` uses only letters, digits, underscores and dots
+- [ ] Enums use `$nomenclature` or `('A','B')`, not regex patterns
 
 ## Reference Files
 
@@ -319,6 +351,7 @@ For detailed syntax and features, consult these references:
 - **Conditional directives**: See [references/conditional-directives.md](references/conditional-directives.md)
 - **Expression language ($compute)**: See [references/expression-language.md](references/expression-language.md)
 - **Internal references ($defs, $ref)**: See [references/internal-references.md](references/internal-references.md)
+- **Virtual fields ($field)**: See [references/virtual-fields.md](references/virtual-fields.md)
 
 ## Quick Patterns
 
@@ -369,11 +402,99 @@ For detailed syntax and features, consult these references:
 "$ref": ["&Auditable", "&Deletable"]
 ```
 
+## Complete Example — E-commerce Order
+
+```json
+{
+  "$version": "1.0.0",
+  "$id": "ecommerce.order",
+  "$title": "E-commerce order",
+  "$description": "E-commerce order - Full Okyline features showcase",
+  "$oky": {
+    "orderId|# ~^ORD-[0-9]{8}$~|Order identifier": "ORD-20250107",
+    "createdAt|@ ~$DateTime~|Creation date": "2025-01-07T14:30:00Z",
+    "//createdBy|~^[A-Z]{2}[0-9]{5}$~|Created By": "PF97877",
+    "customer|@|Customer info": {
+      "id|# (>0)": 42,
+      "email|@ ~$Email~": "alice@example.com",
+      "phone|? ~$Phone~|Optional phone": "+33612345678",
+      "type|@ ($CUSTOMER_TYPE)": "PREMIUM",
+      "$appliedIf type": {
+        "('PREMIUM')": {
+          "loyaltyPoints|@ (>=0)": 1500,
+          "discountRate|@ (0..30)": 15
+        },
+        "('BUSINESS')": {
+          "companyName|@ {2,100}": "Acme Corp",
+          "vatNumber|@ ~$VatNumber~": "FR12345678901"
+        }
+      }
+    },
+    "shipping|@ $ref|Shipping address": "&Address",
+    "billing|? $ref|Billing if different": "&Address",
+    "lines|@ [1,50] -> !|Order lines": [
+      {
+        "sku|# ~$Sku~": "PRD-00123",
+        "name|@ {2,200}": "Wireless Headphones",
+        "quantity|@ (1..999)": 2,
+        "unitPrice|@ (>0)": 79.99,
+        "lineTotal|(%LineTotal)": 159.98,
+        "category|($CATEGORY)": "ELECTRONICS"
+      }
+    ],
+    "payment|@": {
+      "method|@ ($PAYMENT_METHOD)": "CARD",
+      "status|@ ($PAYMENT_STATUS)": "PAID",
+      "$requiredIf status('PAID')": ["paidAt", "transactionId"],
+      "$forbiddenIf status('PENDING')": ["paidAt", "transactionId"],
+      "paidAt|~$DateTime~": "2025-01-07T14:32:00Z",
+      "transactionId|~$TransactionId~": "TXN-A1B2C3D4E5F6"
+    },
+    "amounts|@|Amounts": {
+      "subtotal|@ (%ValidSubtotal)": 159.98,
+      "shippingCost|@ (>=0)": 5.99,
+      "discount|@ (>=0)": 24.0,
+      "tax|@ (>=0)": 28.39,
+      "total|@ (%ValidTotal)": 170.36
+    },
+    "status|@ ($ORDER_STATUS)": "CONFIRMED",
+    "tags|? [0,10] -> {1,30}!|Optional tags": ["gift", "express"],
+    "notes|? {0,500}|Internal notes": "Handle with care"
+  },
+  "$defs": {
+    "Address": {
+      "street|@ {5,200}": "123 Main Street",
+      "city|@ {2,100}": "Paris",
+      "postalCode|@ ~^[0-9]{5}$~": "75001",
+      "country|@ ~^[A-Z]{2}$~": "FR"
+    }
+  },
+  "$format": {
+    "Phone": "^\\+[0-9]{11,14}$",
+    "VatNumber": "^[A-Z]{2}[0-9]{9,12}$",
+    "TransactionId": "^TXN-[A-Z0-9]{12}$",
+    "Sku": "^[A-Z]{3}-[0-9]{5}$"
+  },
+  "$nomenclature": {
+    "CUSTOMER_TYPE": "STANDARD, PREMIUM, BUSINESS",
+    "CATEGORY": "ELECTRONICS, CLOTHING, HOME, FOOD, OTHER",
+    "PAYMENT_METHOD": "CARD, PAYPAL, TRANSFER, CRYPTO",
+    "PAYMENT_STATUS": "PENDING, PAID, FAILED, REFUNDED",
+    "ORDER_STATUS": "DRAFT, CONFIRMED, SHIPPED, DELIVERED, CANCELLED"
+  },
+  "$compute": {
+    "LineTotal": "lineTotal == quantity * unitPrice",
+    "ValidSubtotal": "subtotal > 0 && subtotal == sum(parent.lines, lineTotal)",
+    "ValidTotal": "total > 0 && total == subtotal + shippingCost + tax - discount"
+  }
+}
+```
+
 ## Document Metadata (Optional) - Must be generated in this order
 
 ```json
 {
-  "$okylineVersion": "1.3.0",
+  "$okylineVersion": "1.4.0",
   "$version": "1.0.0",
   "$id": "my-schema",
   "$title": "My Schema",
@@ -448,11 +569,7 @@ To validate a constraint across an array from root context, attach the compute t
   ❌ `"permis|@ ('A','B','C')[]": ["B"]`
   ✅ `"permis|@ -> ('A','B','C')": ["B"]`
   ✅ `"permis|@ [1,5] -> ('A','B','C')": ["B"]`
-  - Using hyphens in `$id` — only letters, digits, underscores and dots are allowed
-- Applying element constraints (enum, length, range) directly to array field instead of using `->`:
-  ❌ `"permis|@ ('A','B','C')[]": ["B"]`
-  ✅ `"permis|@ -> ('A','B','C')": ["B"]`
-  ✅ `"permis|@ [1,5] -> ('A','B','C')": ["B"]`
+- Using hyphens in `$id` — only letters, digits, underscores and dots are allowed
 - Placing `$ref` after `->` for arrays of references (`$ref` is a type indicator, not a validation constraint):
   ❌ `"children|[*] -> $ref": ["&Node"]`
   ✅ `"children|[*] $ref": ["&Node"]`
@@ -466,7 +583,7 @@ To validate a constraint across an array from root context, attach the compute t
  - Using null as an example value, even with ? Okyline needs a valid example to infer the type.:
   ❌ `"name|? ": null`
   ✅ `"name|? ": "Charles"`
- - Using decimal number example terminant par .00 sans " ".
+ - Using decimal number example ending in .00 without quotes.
    ❌ `"amount|? ": 800.00`
   ✅ `"amount|? ": "800.00"`
   
@@ -477,9 +594,9 @@ To validate a constraint across an array from root context, attach the compute t
   }
 ```
 
-## ⚠️ Erreurs silencieuses (pas d'erreur syntaxe, mais problème à la validation)
+## Silent errors (no syntax error, but validation problem)
 
-- [ ] Décimales en `.00` → `"150.00"` (sinon inféré comme Integer)
-- [ ] Exemple `null` → impossible d'inférer le type
-- [ ] Tableau vide `[]` → impossible d'inférer le type des éléments
-- [ ] `"champ|Label"` → "Label" interprété comme contrainte (utiliser `"champ| |Label"`)
+- [ ] Decimals ending in `.00` → use `"150.00"` (otherwise inferred as Integer)
+- [ ] Example `null` → cannot infer type
+- [ ] Empty array `[]` → cannot infer element type
+- [ ] `"field|Label"` → "Label" parsed as constraint (use `"field| |Label"`)

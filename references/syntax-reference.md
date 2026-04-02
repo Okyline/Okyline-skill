@@ -233,7 +233,7 @@ Value must match at least one schema.
 
 ```json
 {
-  "$okylineVersion": "1.3.0",      // Okyline spec version
+  "$okylineVersion": "1.4.0",      // Okyline spec version
   "$version": "1.0.0",             // Schema version (required for registry)
   "$id": "namespace.schema-name",  // Unique identifier, 
   "$title": "Schema Title",

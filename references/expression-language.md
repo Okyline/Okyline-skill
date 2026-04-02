@@ -97,9 +97,9 @@ Use `%ComputeName` to reference other computed expressions.
 | `pow(base, exp)` | Power | `pow(2, 3) → 8.0` |
 | `log(x)` | Natural logarithm | `log(2.71828) → 1.0` |
 | `log10(x)` | Base-10 logarithm | `log10(1000) → 3.0` |
-| `random(min?, max?)` | Random integer | `random(5, 10) → 7` |
 | `toInt(v)` | Convert to integer | `toInt(3.7) → 4` |
 | `toNum(v)` | Convert to number | `toNum("42") → 42.0` |
+| `toStr(v)` | Convert to string | `toStr(42) → "42"` |
 
 ---
 
@@ -107,17 +107,27 @@ Use `%ComputeName` to reference other computed expressions.
 
 | Function | Description | Example |
 |----------|-------------|---------|
+| `isNull(v)` | True if null | `isNull(null) → true` |
 | `isNullOrEmpty(s)` | True if null or empty | `isNullOrEmpty("") → true` |
 | `isEmpty(s)` | True if length is 0 | `isEmpty("") → true` |
 | `length(s)` | String length (null → 0) | `length("hey") → 3` |
 | `substring(s, start, len)` | Extract substring | `substring("Hello", 1, 3) → "ell"` |
-| `substringBefore(s, delim)` | Part before delimiter | `substringBefore("a:b:c", ":") → "a"` |
-| `substringAfter(s, delim)` | Part after delimiter | `substringAfter("a:b:c", ":") → "b:c"` |
+| `substringBefore(s, delim)` | Part before first occurrence | `substringBefore("a:b:c", ":") → "a"` |
+| `substringAfter(s, delim)` | Part after first occurrence | `substringAfter("a:b:c", ":") → "b:c"` |
+| `substringBeforeLast(s, delim)` | Part before last occurrence | `substringBeforeLast("a:b:c", ":") → "a:b"` |
+| `substringAfterLast(s, delim)` | Part after last occurrence | `substringAfterLast("a.b.txt", ".") → "txt"` |
 | `replace(s, target, repl)` | Replace all occurrences | `replace("foo bar foo", "foo", "baz") → "baz bar baz"` |
+| `replaceFirst(s, target, repl)` | Replace first occurrence | `replaceFirst("foo bar foo", "foo", "baz") → "baz bar foo"` |
+| `replaceLast(s, target, repl)` | Replace last occurrence | `replaceLast("foo bar foo", "foo", "baz") → "foo bar baz"` |
 | `trim(s)` | Remove whitespace | `trim("  hi  ") → "hi"` |
+| `ltrim(s)` | Remove leading spaces | `ltrim("  hi  ") → "hi  "` |
+| `rtrim(s)` | Remove trailing spaces | `rtrim("  hi  ") → "  hi"` |
 | `startsWith(s, prefix)` | Check prefix | `startsWith("hello", "he") → true` |
 | `endsWith(s, suffix)` | Check suffix | `endsWith("hello", "lo") → true` |
 | `contains(s, search)` | Check substring | `contains("banana", "an") → true` |
+| `removePrefix(s, prefix)` | Remove prefix if present | `removePrefix("Hello", "He") → "llo"` |
+| `removeSuffix(s, suffix)` | Remove suffix if present | `removeSuffix("Hello", "lo") → "Hel"` |
+| `removeRange(s, start, len)` | Remove len chars from start | `removeRange("Hello", 1, 3) → "Ho"` |
 | `toUpperCase(s)` | To upper case | `toUpperCase("Hi") → "HI"` |
 | `toLowerCase(s)` | To lower case | `toLowerCase("Hi") → "hi"` |
 | `capitalize(s)` | Uppercase first char | `capitalize("hello") → "Hello"` |
@@ -126,6 +136,7 @@ Use `%ComputeName` to reference other computed expressions.
 | `padEnd(s, len, ch)` | Right pad | `padEnd("7", 3, "0") → "700"` |
 | `repeat(times, ch)` | Repeat character | `repeat(5, "*") → "*****"` |
 | `indexOf(s, sub)` | First index of substring | `indexOf("abracadabra", "bra") → 1` |
+| `indexOfFirst(s, sub)` | Alias for indexOf | `indexOfFirst("abracadabra", "bra") → 1` |
 | `indexOfLast(s, sub)` | Last index of substring | `indexOfLast("abracadabra", "bra") → 8` |
 
 ### String Index Handling
@@ -156,6 +167,14 @@ Use `%ComputeName` to reference other computed expressions.
 | `year(date)` | Extract year | `year("2024-03-15") → 2024` |
 | `month(date)` | Extract month | `month("2024-03-15") → 3` |
 | `day(date)` | Extract day | `day("2024-03-15") → 15` |
+| `dayOfWeek(date)` | Day of week (MON=1, SUN=7) | `dayOfWeek("2024-03-15") → 5` |
+| `dayOfYear(date)` | Day of year (1-366) | `dayOfYear("2024-03-15") → 75` |
+| `weekOfYear(date)` | ISO week number (1-53) | `weekOfYear("2024-01-01") → 1` |
+| `quarter(date)` | Quarter (1-4) | `quarter("2024-09-15") → 3` |
+| `semester(date)` | Semester (1-2) | `semester("2024-09-15") → 2` |
+| `before(date1, date2)` | True if date1 < date2 | `before("2024-01-01", "2024-12-31") → true` |
+| `after(date1, date2)` | True if date1 > date2 | `after("2024-12-31", "2024-01-01") → true` |
+| `equals(date1, date2)` | True if same date | `equals("2024-03-15", "2024-03-15") → true` |
 
 ---
 
@@ -163,13 +182,20 @@ Use `%ComputeName` to reference other computed expressions.
 
 | Function | Description | Example |
 |----------|-------------|---------|
-| `sum(collection, expr)` | Sum of expression over collection | `sum(items, price)` |
+| `sum(collection, expr)` | Sum of expression | `sum(items, price)` |
 | `average(collection, expr)` | Average of expression | `average(items, quantity)` |
 | `min(collection, expr)` | Minimum value | `min(scores, score)` |
 | `max(collection, expr)` | Maximum value | `max(scores, score)` |
 | `count(collection)` | Count non-null elements | `count(items)` |
 | `countAll(collection)` | Count all elements | `countAll(items)` |
 | `countIf(collection, expr)` | Count where expr is true | `countIf(users, active)` |
+| `exists(collection, expr)` | True if any element matches | `exists(items, price > 100)` |
+| `notExists(collection, expr)` | True if no element matches | `notExists(items, price < 0)` |
+| `sumIf(collection, pred, expr)` | Sum expr where pred is true | `sumIf(items, active, price)` |
+| `map(collection, expr)` | List of expr per element | `map(items, price * qty)` |
+| `filter(collection, expr)` | Elements where expr is true | `filter(items, active)` |
+
+For scalar collections (arrays of numbers/strings), aggregations work without a second argument: `sum(scores)`, `min(prices)`.
 
 **Aggregation with compute reference:**
 ```json
@@ -177,6 +203,59 @@ Use `%ComputeName` to reference other computed expressions.
   "$compute": {
     "LineTotal": "price * quantity",
     "OrderTotal": "sum(items, %LineTotal)"
+  }
+}
+```
+
+---
+
+## Membership Function — `in`
+
+Tests whether a value belongs to a set.
+
+| Form | Example |
+|------|---------|
+| Inline literals | `in(status, 'DRAFT', 'SENT')` |
+| Nomenclature | `in(status, '$INVOICE_STATUS')` |
+| Array field | `in(code, allowedCodes)` |
+
+- `null` value → `false`
+- List as first arg → containsAll semantics: `in(myList, 'A', 'B')` checks all present
+
+---
+
+## List Iteration Context
+
+Inside aggregation lambdas (`countIf`, `exists`, `filter`, `sum`, etc.), these variables are available:
+
+| Variable | Resolves to |
+|----------|-------------|
+| `origin` | The item whose validation triggered the aggregation |
+| `prev` | Element before current iteration element |
+| `next` | Element after current iteration element |
+| `first` | First element of the collection |
+| `last` | Last element of the collection |
+
+**Positional predicates:**
+
+| Predicate | Returns true when |
+|-----------|-------------------|
+| `isOrigin` | Current element is the origin element |
+| `isFirst` | Current element is first in collection |
+| `isLast` | Current element is last in collection |
+
+All support dotted navigation: `origin.amount`, `prev.date`, `first.id`.
+
+**Example — uniqueness check:**
+```json
+{
+  "$compute": {
+    "IsUnique": "countIf(parent.items, id == origin.id) == 1"
+  },
+  "$oky": {
+    "items|[*]": [{
+      "id|@ (%IsUnique)": "A001"
+    }]
   }
 }
 ```

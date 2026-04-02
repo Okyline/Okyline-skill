@@ -15,31 +15,32 @@ Full Okyline core language support:
 - Expression language for computed validations `$compute`
 - Reusable definitions with `$defs` and `$ref` (internal references)
 
-> **Note:** External references (`$xRef`) are not supported.
-
 ## Installation
+
+### Claude.ai
+
+1. Go to **Settings > Customize > Skills**
+2. Click **+** > **Create skill** and upload the ZIP file
 
 ### Claude Code
 
-```bash
-# Clone to your global skills folder
-git clone https://github.com/Okyline/okyline-skill ~/.claude/skills/okyline
+Copy or extract this folder to your skills directory:
 
-# Or for project-specific use
-git clone https://github.com/Okyline/okyline-skill .claude/skills/okyline
+```bash
+# Global (all projects)
+~/.claude/skills/okyline/
+
+# Or project-specific
+.claude/skills/okyline/
 ```
 
 ### OpenAI Codex CLI
 
+Copy or extract this folder to:
+
 ```bash
-git clone https://github.com/Okyline/okyline-skill ~/.codex/skills/okyline
+~/.codex/skills/okyline/
 ```
-
-### Claude.ai
-
-1. Download this repository as a ZIP file
-2. Go to **Settings > Capabilities > Skills**
-3. Click **Upload skill** and select the ZIP file
 
 ## Usage
 
@@ -55,6 +56,8 @@ You can also provide more context:
 - "Convert this JSON Schema to Okyline"
 - "Transform this Avro schema into Okyline format"
 
+For best results, provide a JSON example along with your existing validation rules or data specifications — Claude will translate them into Okyline constraints automatically.
+
 Or ask questions about the language itself:
 
 - "How do I make a field nullable in Okyline?"
@@ -69,15 +72,13 @@ Claude will automatically invoke this skill when relevant.
 okyline-skill/
 ├── README.md                             # This file
 ├── LICENSE                               # Apache 2.0
-└── skills/
-    └── okyline/
-        ├── SKILL.md                      # Main skill instructions
-        ├── package.json                  # Skill metadata
-        └── references/
-            ├── syntax-reference.md       # Complete constraint syntax
-            ├── internal-references.md    # $defs and $ref usage
-            ├── conditional-directives.md # Conditional logic
-            └── expression-language.md    # $compute expressions
+├── SKILL.md                              # Main skill instructions
+└── references/
+    ├── syntax-reference.md               # Complete constraint syntax
+    ├── internal-references.md            # $defs and $ref usage
+    ├── conditional-directives.md         # Conditional logic
+    ├── expression-language.md            # $compute expressions
+    └── virtual-fields.md                 # $field virtual fields
 ```
 
 ## Example
@@ -95,8 +96,8 @@ okyline-skill/
 
 ## Links
 
+- [Okyline Free Resources](https://community.okyline.design-hub.okyline.io/)
 - [Okyline Free Studio](https://community.studio.okyline.io/)
-- [Okyline Getting Started](https://public-docs.okyline.io/Okyline-getting-started.pdf)
 - [Okyline Java library on Maven Central](https://central.sonatype.com/artifact/io.akwatype/okyline)
 - [Okyline Specification](https://github.com/Okyline/okyline-spec)
 - [Agent Skills Standard](https://agentskills.io)
