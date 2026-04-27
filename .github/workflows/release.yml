@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build skill ZIP
+        run: |
+          mkdir -p build
+          rsync -a --exclude='.git' \
+                   --exclude='.github' \
+                   --exclude='.claude' \
+                   --exclude='.idea' \
+                   --exclude='build' \
+                   --exclude='*.zip' \
+                   ./ build/okyline/
+          cd build
+          zip -r "okyline-skill-${GITHUB_REF_NAME}.zip" okyline
+
+      - name: Attach ZIP to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/okyline-skill-${{ github.ref_name }}.zip
