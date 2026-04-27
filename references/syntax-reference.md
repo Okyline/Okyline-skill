@@ -185,6 +185,18 @@ Value must match at least one schema.
 }
 ```
 
+**Key-value form** (since 1.5.0) — associates a value with each key:
+```json
+{
+  "$nomenclature": {
+    "IbanLetters": "A:10,B:11,C:12,D:13,E:14,F:15,..."
+  }
+}
+```
+- The two forms cannot be mixed within a single entry.
+- For validation (`($NAME)`), keys are the allowed values — both forms behave identically.
+- Values are accessible via `lookup(key, '$NAME')` in expressions.
+
 ### `$format` - Reusable Patterns
 ```json
 {

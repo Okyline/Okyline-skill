@@ -1,6 +1,6 @@
-# Okyline Expression Language
+# Okyline Expression Language (1.6.0)
 
-The expression language is used in `$compute` blocks for business rules, cross-field validation, and calculated constraints.
+Used in `$compute` blocks for business rules, cross-field validation, and calculated constraints.
 
 ## Declaration & Usage
 
@@ -57,6 +57,19 @@ A `$compute` expression is always evaluated in the context of the **object that 
 
 ---
 
+## List Literals
+
+Inline lists with `[...]` syntax, usable wherever a value is expected.
+
+```js
+sum([1, 2, 3])                          // → 6
+in(status, ["DRAFT", "SENT", "PAID"])   // membership
+join(["a", "b", "c"], "-")              // → "a-b-c"
+count([])                               // empty list allowed → 0
+```
+
+---
+
 ## Referencing Other Computes
 
 Use `%ComputeName` to reference other computed expressions.
@@ -81,6 +94,38 @@ Use `%ComputeName` to reference other computed expressions.
   }
 }
 ```
+
+### Parameterized computes
+
+Declare formal parameters with `"Name(p1, p2)": "body"`; call with matching arguments.
+
+```json
+"$compute": {
+  "RateCheck(cat)": "category != cat || rate > 0",
+  "InRange(lo, hi)": "it >= lo && it <= hi"
+},
+"$oky": {
+  "age|(%InRange(18, 120))": 30,
+  "rateS|(%RateCheck('S'))": 20
+}
+```
+
+- Params are local to the body; they **shadow** sibling fields of the same name — use `this.field` to unshadow.
+- On a field constraint (`|(%F(args))`), args are limited to **literals or dotted paths**. Full expressions are allowed when calling from another compute body.
+- Arity is strict: a mismatch is a schema load error. A bare `%Name` reference (no parens) is reserved for arity 0.
+- Params must not collide with special variables (`it`, `parent`, `root`, `index`, `size`, `prev`, `next`, `first`, `last`, `origin`, `isOrigin`, `isFirst`, `isLast`, `this`).
+- Canonical name = part before `(`. Declaring both `"F"` and `"F(a)"` is a load error.
+- Arguments are passed by value and kept as-is: a scalar param is used directly (`p`); an **object param** exposes members via `p.field` (cascading: `p.address.city`); a **list param** composes with `firstOf`/`at`/`findFirst`/`sum`/…
+
+```json
+"$compute": {
+  "CheckCity(a)":  "a.city == 'Paris'",
+  "CheckDeep(a)":  "a.region.country == 'FR'",
+  "Total(lines)":  "sum(lines, LineExtensionAmount)"
+}
+```
+
+- `%Name.field.deep` accesses members of the compute's result. Example: `"DocCurrency": "%DocRoot.DocumentCurrencyCode"` where `DocRoot` returns an object.
 
 ---
 
@@ -139,6 +184,22 @@ Use `%ComputeName` to reference other computed expressions.
 | `indexOfFirst(s, sub)` | Alias for indexOf | `indexOfFirst("abracadabra", "bra") → 1` |
 | `indexOfLast(s, sub)` | Last index of substring | `indexOfLast("abracadabra", "bra") → 8` |
 
+### String ↔ List
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `chars(s)` | List of one-element strings (one per Unicode codepoint) | `chars("abc") → ["a","b","c"]` |
+| `split(s, sep)` | Split on **literal** separator (not regex) | `split("a.b.c", ".") → ["a","b","c"]` |
+| `join(coll, sep)` | Concatenate elements (null elements skipped) | `join([1,2,3], ",") → "1,2,3"` |
+
+```js
+// Count vowels in a string
+countIf(chars(name), in(it, ["a","e","i","o","u"]))
+
+// Sum digits in a code
+sum(map(filter(chars(code), it >= "0" && it <= "9"), toNum(it)))
+```
+
 ### String Index Handling
 - Negative start indices → clamped to 0
 - Negative lengths → treated as 0
@@ -180,24 +241,27 @@ Use `%ComputeName` to reference other computed expressions.
 
 ## Aggregation Functions
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `sum(collection, expr)` | Sum of expression | `sum(items, price)` |
-| `average(collection, expr)` | Average of expression | `average(items, quantity)` |
-| `min(collection, expr)` | Minimum value | `min(scores, score)` |
-| `max(collection, expr)` | Maximum value | `max(scores, score)` |
-| `count(collection)` | Count non-null elements | `count(items)` |
-| `countAll(collection)` | Count all elements | `countAll(items)` |
-| `countIf(collection, expr)` | Count where expr is true | `countIf(users, active)` |
-| `exists(collection, expr)` | True if any element matches | `exists(items, price > 100)` |
-| `notExists(collection, expr)` | True if no element matches | `notExists(items, price < 0)` |
-| `sumIf(collection, pred, expr)` | Sum expr where pred is true | `sumIf(items, active, price)` |
-| `map(collection, expr)` | List of expr per element | `map(items, price * qty)` |
-| `filter(collection, expr)` | Elements where expr is true | `filter(items, active)` |
+Operate on **object collections**, **scalar collections** (numbers, strings, booleans), or **list literals**.
 
-For scalar collections (arrays of numbers/strings), aggregations work without a second argument: `sum(scores)`, `min(prices)`.
+| Function | Object form | Scalar form |
+|----------|-------------|-------------|
+| `sum` | `sum(items, price)` | `sum(scores)` |
+| `average` | `average(items, qty)` | `average(scores)` |
+| `min` / `max` | `min(items, score)` | `min(scores)` |
+| `count` | `count(items)` | `count(scores)` |
+| `countAll` | `countAll(items)` | `countAll(scores)` |
+| `countIf` | `countIf(users, active)` | `countIf(scores, it > 10)` |
+| `exists` / `notExists` | `exists(items, price > 100)` | `exists(scores, it > 10)` |
+| `sumIf` | `sumIf(items, active, price)` | `sumIf(scores, it > 0, it)` |
+| `map` | `map(items, price * qty)` | `map(scores, it + 10)` |
+| `filter` | `filter(items, active)` | `filter(scores, it > 0)` |
 
-**Aggregation with compute reference:**
+**Inside aggregation lambdas:**
+- For **object collections**, reference properties by name (`price`, `qty`).
+- For **scalar collections**, reference the current element via `it`.
+- `it` is **rebound** locally to the lambda — once the aggregation completes, `it` reverts to the outer field value.
+
+**Compute reference in aggregations:**
 ```json
 {
   "$compute": {
@@ -205,6 +269,80 @@ For scalar collections (arrays of numbers/strings), aggregations work without a 
     "OrderTotal": "sum(items, %LineTotal)"
   }
 }
+```
+
+### List element access
+
+Retrieve a single element. All null-safe (null list / empty / no match / out of bounds → `null`).
+
+| Function | Returns |
+|----------|---------|
+| `firstOf(coll)` | First element, null if empty |
+| `lastOf(coll)` | Last element, null if empty |
+| `findFirst(coll, pred)` | First matching element, null otherwise |
+| `findLast(coll, pred)` | Last matching element (reverse scan), null otherwise |
+| `at(coll, idx)` | Element at `idx` (0-based), null if out of bounds or negative |
+
+```js
+firstOf(items)                          // first element
+findFirst(lines, cat == 'S')            // first where predicate true
+findLast(events, type == 'UPDATE')      // last match (scans from the end)
+at(payments, 0)                         // element by index
+```
+
+### Member access on any expression
+
+Chain `.field` after a function call, a parameterized compute, or a parenthesized expression to access an object's property.
+
+```js
+firstOf(items).amount
+findFirst(lines, cat == 'S').amount > 100
+%getParty('S').address.city
+at(payments, 0).status
+```
+
+- Dotted paths on bare identifiers (`parent.x.y`) are unchanged — the postfix `.field` applies only after `)` or `]`.
+- Resolution on a `null` base → `null`.
+
+---
+
+### Null checks
+
+| Function | Returns |
+|----------|---------|
+| `isNull(x)` | `true` if `x` is null |
+| `hasValue(x)` | `true` if `x` is not null (strict opposite of `isNull`) |
+| `isNullOrEmpty(s)` | `true` if string is null or `""` |
+
+```js
+hasValue(TaxExemptionReason)              // presence check, reads naturally
+!hasValue(optionalRef) && hasValue(name)  // combinable
+```
+
+---
+
+## Nomenclatures
+
+Defined in `$nomenclature`, referenced in field constraints with `($NAME)` or in expressions with `'$NAME'`.
+
+**Simple form** (list of allowed values):
+```json
+{ "$nomenclature": { "Status": "DRAFT,SENT,PAID" } }
+```
+
+**Key-value form** (since 1.5.0):
+```json
+{ "$nomenclature": { "IbanLetters": "A:10,B:11,C:12,D:13,..." } }
+```
+
+The two forms cannot be mixed within a single entry.
+
+- For **validation** (`($NAME)`), keys are the allowed values — both forms accept the same inputs.
+- Associated values are accessible via `lookup(key, '$NAME')` for data-driven transformations.
+
+```js
+// Convert IBAN letter to its numeric value using nomenclature
+lookup(letter, '$IbanLetters')
 ```
 
 ---
@@ -215,12 +353,26 @@ Tests whether a value belongs to a set.
 
 | Form | Example |
 |------|---------|
-| Inline literals | `in(status, 'DRAFT', 'SENT')` |
+| List literal | `in(status, ['DRAFT', 'SENT'])` |
 | Nomenclature | `in(status, '$INVOICE_STATUS')` |
 | Array field | `in(code, allowedCodes)` |
 
 - `null` value → `false`
-- List as first arg → containsAll semantics: `in(myList, 'A', 'B')` checks all present
+- List as first arg → containsAll semantics
+
+---
+
+## Lookup Function — `lookup`
+
+Retrieves a value from a JSON object used as a key/value map.
+
+```js
+lookup(currency, rates)              // → value at key, or null
+lookup(currency, rates) ?? 1.0       // with fallback
+```
+
+- `null` key, `null` source, or non-object source → `null`
+- Returns the raw value (no coercion); use `toNum`, `toStr` if needed
 
 ---
 
@@ -235,6 +387,8 @@ Inside aggregation lambdas (`countIf`, `exists`, `filter`, `sum`, etc.), these v
 | `next` | Element after current iteration element |
 | `first` | First element of the collection |
 | `last` | Last element of the collection |
+| `index` | 0-based index of current iteration element |
+| `size` | Total number of elements in the iterated collection |
 
 **Positional predicates:**
 

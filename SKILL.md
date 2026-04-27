@@ -9,7 +9,7 @@ metadata:
   repository: Okyline/Okyline-skill
 ---
 
-# Okyline Schema Language v1.4.0
+# Okyline Schema Language v1.6.0
 
 Okyline is a declarative language for describing and validating JSON structures using inline constraints on field names. Schemas are valid JSON documents with real example values.
 
@@ -31,7 +31,7 @@ The examples here are a summary, not an exhaustive reference.
 Use `$defs`/`$ref` when:
 1. **Recursion** (mandatory — only way to express recursive structures)
 2. **Repeated structures** identical across multiple usages (e.g. `Period`, `Address`)
-3. **Template pattern** — base structure specialized per usage via `$override` (e.g. `Coding`)
+3. **Template pattern** — base structure specialized per usage via `$override` or `$amend` (e.g. `Coding`)
 4. **Explicit user request**
 
 Default → inline in `$oky`. Don't over-abstract — factorize only when it reduces real duplication or expresses a meaningful shared type.
@@ -284,15 +284,15 @@ Include all fields from a base schema:
 }
 ```
 
-Multiple inheritance: `"$ref": ["&Auditable", "&Deletable"]`
-
 ### Modifying Inherited Fields
 
 | Directive | Usage | Description |
 |-----------|-------|-------------|
 | `$remove` | `"$remove": ["field1", "field2"]` | Exclude inherited fields |
-| `$override` | `"field \| $override ...": value` | Replace inherited definition |
-| `$keep` | `"$keep": ["&A.field"]` | Resolve collision in multiple inheritance |
+| `$override` | `"field \| $override ...": value` | Replace inherited field entirely (unspecified blocks are erased) |
+| `$amend` | `"field \| $amend ...": value` | Adapt inherited field block-by-block (unspecified blocks are kept from base) |
+
+Both `$override` and `$amend` preserve type, collection nature and `$ref` target. In an `$appliedIf` branch, redefining a parent field without `$override` or `$amend` is a parsing error.
 
 ## Choosing the Right Conditional Mechanism
 
@@ -321,7 +321,13 @@ Introduce `$field` only when a conditional directive needs a **derived value not
 
 Expressions in `$compute` must be **attached to a field** using `|(%ComputeName)` syntax. The expression is evaluated in the context of the **object that directly contains the annotated field** — all properties of that object are accessible, including sibling arrays.
 
-**Path resolution:** `parent` always refers to the parent of the evaluation context. Context fields are accessed directly (no prefix needed), so `parent` is always one level up from the context. Use `parent.parent` to go two levels up, or `root` to reach the document root directly. Use `this.` to disambiguate when a field name collides with a reserved keyword (`parent`, `root`, `prev`, `next`, `first`, `last`, `origin`).
+**Path resolution:** `parent` always refers to the parent of the evaluation context. Context fields are accessed directly (no prefix needed), so `parent` is always one level up from the context. Use `parent.parent` to go two levels up, or `root` to reach the document root directly. Use `this.` to disambiguate when a field name collides with a reserved keyword or a compute parameter (`parent`, `root`, `prev`, `next`, `first`, `last`, `origin`).
+
+**Parameterized computes:** a compute can declare formal parameters: `"Name(p1, p2)": "body"` and be called with `%Name(arg1, arg2)`. Args on a field constraint are literals or dotted paths; full expressions are allowed from another compute body. Params shadow sibling fields inside the body — use `this.field` to unshadow. A param bound to an object exposes its members via `p.field`; a list param composes with `firstOf`/`at`/`findFirst`/`sum`/…
+
+**List element access:** `firstOf(list)`, `lastOf(list)`, `findFirst(list, pred)`, `findLast(list, pred)`, `at(list, idx)` return a single element (null if empty / not found / out of bounds). Chain `.field` directly: `findFirst(lines, cat == 'S').amount`.
+
+**Compute reference with dotted access:** `%Name.field.deep` accesses members of the compute's result, useful when the compute returns an object (e.g. `"%DocRoot.DocumentCurrencyCode"` where `DocRoot = "root.Invoice ?? root.CreditNote"`).
 
 See `references/expression-language.md` for full details and examples.
 
@@ -398,8 +404,15 @@ For detailed syntax and features, consult these references:
 // Property-level $ref (field IS the type, no specialization)
 "period|$ref||Validity period": "&Period"
 
-// Multiple inheritance
-"$ref": ["&Auditable", "&Deletable"]
+// $amend — adapt inherited field keeping base constraints
+"email|$amend @": "alice@corp.com"
+
+// Parameterized compute — one rule, many categories
+"$compute": { "RateCheck(cat)": "category != cat || rate > 0" }
+"rate|(%RateCheck('S'))": 20
+
+// List access with field chain
+"$compute": { "FirstPaid": "findFirst(payments, status == 'OK').amount > 0" }
 ```
 
 ## Complete Example — E-commerce Order
@@ -494,12 +507,13 @@ For detailed syntax and features, consult these references:
 
 ```json
 {
-  "$okylineVersion": "1.4.0",
+  "$okylineVersion": "1.5.0",
   "$version": "1.0.0",
   "$id": "my-schema",
   "$title": "My Schema",
   "$description": "Schema description",
   "$additionalProperties": false,
+  "$sequence": false,
   "$oky": {
     ...
   },
@@ -561,7 +575,7 @@ To validate a constraint across an array from root context, attach the compute t
 - Using absolute paths in `$compute` instead of relative references to parent context
 - Using `$ref` without the `&` prefix (correct: `"&Address"`, wrong: `"Address"`)
 - Object-level `$ref` targeting a scalar definition (must target object schema)
-- Redefining an inherited field without using `$override`
+- Redefining an inherited field without using `$override` or `$amend`
 - Creating circular object-level references (A includes B includes A)
 - Placing `$defs` inside `$oky` (must be at root level)
 - Using empty brackets `[]` for arrays — use `[*]` or omit size constraint entirely

@@ -222,45 +222,14 @@ Effective `Person`:
 ### Rules
 
 - Object-level `$ref` **MUST** target an **object schema** (not scalar)
-- Definitions containing conditional rules (`$requiredIf`, etc.) or `$compute` **cannot be inherited** via object-level `$ref`
-
-### Multiple Inheritance
-
-An object can include multiple base schemas:
-
-```json
-{
-  "$oky": {
-    "Article": {
-      "$ref": [
-        "&Auditable",
-        "&Deletable"
-      ],
-      "title|@ {1,200}": "Mon article"
-    }
-  },
-  "$defs": {
-    "Auditable": {
-      "createdAt|@ ~$DateTime~": "2025-01-01T00:00:00Z",
-      "updatedAt|@ ~$DateTime~": "2025-01-01T00:00:00Z"
-    },
-    "Deletable": {
-      "deletedAt|~$DateTime~": "2025-01-08T00:00:00Z",
-      "isDeleted|@": true
-    }
-  }
-}
-```
-
-- References are applied in order (left to right)
-- Field collision between base schemas → schema rejected (unless `$keep` or `$remove` resolves it)
+- Definitions containing conditional rules (`$requiredIf`, etc.) or `$compute` expressions **can be inherited** via object-level `$ref`, provided `$remove` is not used on that inclusion.
+- Object-level `$ref` targets **exactly one** template (single reference string, not an array).
 
 ### Field Collision Rules
 
 | Situation | Result |
 |-----------|--------|
-| Local field same name as inherited (no `$override`) | Schema rejected |
-| Two base schemas define same field (not removed, no `$keep`) | Schema rejected |
+| Local field same name as inherited (no `$override` or `$amend`) | Schema rejected |
 
 ### Cycles
 
@@ -333,90 +302,50 @@ Effective schema:
 
 ---
 
-## `$keep` — Resolving Inheritance Conflicts
+## `$override` and `$amend` — Adapting Inherited Fields
 
-When multiple inheritance causes field collisions, `$keep` specifies which definition's field to retain:
+Two directives to adapt a field inherited from a template:
 
-```json
-{
-  "$oky": {
-    "Combined": {
-      "$ref": ["&A", "&B"],
-      "$keep": ["&A.config"]
-    }
-  },
-  "$defs": {
-    "A": {
-      "config|@": "value-from-A",
-      "name|@": "A"
-    },
-    "B": {
-      "config|@": "value-from-B",
-      "status|@": "active"
-    }
-  }
-}
-```
+- **`$override`** — replaces the field entirely. Unspecified blocks are **erased**.
+- **`$amend`** — replaces only the specified blocks. Unspecified blocks are **kept from the base**.
 
-### Rules
-
-- `$keep` is an array of `&DefinitionName.fieldName`
-- Only valid with multiple inheritance (`$ref` as array)
-- Collisions on fields NOT in `$keep` → schema rejected
-- `$keep` and `$remove` can be used together
-
----
-
-## `$override` — Redefining Inherited Fields
-
-Explicitly redefine an inherited field:
+Both preserve field type, collection nature and `$ref` target (structural invariants).
 
 ```json
 {
   "$oky": {
     "Employee": {
       "$ref": "&Person",
-      "name | $override @ {1,100}": "Jean Dupont",
+      "name | $amend @": "John Doe",
       "salary|@ (>=0)": 3000
     }
   },
   "$defs": {
     "Person": {
-      "name|@ {1,50}": "John",
+      "name|? {1,50}": "John",
       "age|@ (0..150)": 42
     }
   }
 }
 ```
 
+Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?` and `{1,50}` are kept from the base. Using `$override @` instead would yield just `name|@` (everything else erased).
+
 ### Rules
 
-- `$override` MUST target a field that exists in the referenced schema (after removals)
-- The inherited definition is **completely replaced** by the local one
-- Without `$override`, redefining an inherited field → error
-- `$override` applies to **value constraints only** (structural constraints are always local)
+- `$override` and `$amend` MUST target a field that exists in the referenced schema (after removals), or a parent-level field in an `$appliedIf` branch
+- `$override` and `$amend` MUST NOT appear on the same field
+- Without either directive, redefining an inherited or parent-level field → error
+- In an `$appliedIf` branch, redefining a parent field requires explicit `$override` or `$amend`
 
 ---
 
 ## Order of Application
 
-### Single Reference
-
-1. **Reference injection** — Resolve `$ref`, inject all fields
+1. **Reference injection** — Resolve the single `$ref`, inject all fields
 2. **Removals** — Apply `$remove`
-3. **Overrides** — Apply `$override`
+3. **Adaptations** — Apply `$override` and `$amend` via block-by-block merge
 4. **Local additions** — Add remaining local fields
-
-### Multiple References
-
-For `"$ref": ["&A", "&B", "&C"]`:
-
-1. Inject A → Apply removes → current field set
-2. Inject B → Apply removes → check collisions
-3. Inject C → Apply removes → check collisions
-4. Apply `$keep` to resolve remaining collisions
-5. Apply overrides on final inherited set
-6. Local additions (collision = error)
 
 ---
 
@@ -424,9 +353,12 @@ For `"$ref": ["&A", "&B", "&C"]`:
 
 | Situation | Result |
 |-----------|--------|
+| `$ref` value is not a single reference string | Schema rejected |
 | `$remove` targets non-existent field | Schema rejected |
-| `$override` targets non-existent field (after removes) | Schema rejected |
-| Local field collides with inherited (no `$override`) | Schema rejected |
+| `$override` or `$amend` targets non-existent field (after removes) | Schema rejected |
+| `$override` and `$amend` both on same field | Schema rejected |
+| `$override` or `$amend` changes type, collection nature or `$ref` target | Schema rejected |
+| Local field collides with inherited (no `$override` or `$amend`) | Schema rejected |
 | Two base schemas define same field (not removed, no `$keep`) | Schema rejected |
 | Object-level cycle detected | Schema rejected |
 | Object-level `$ref` targets non-object schema | Schema rejected |
