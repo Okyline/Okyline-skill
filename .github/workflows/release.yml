@@ -21,8 +21,10 @@ jobs:
                    --exclude='.github' \
                    --exclude='.claude' \
                    --exclude='.idea' \
+                   --exclude='.gitignore' \
                    --exclude='build' \
                    --exclude='*.zip' \
+                   --exclude='RELEASE.md' \
                    ./ build/okyline/
           cd build
           zip -r "okyline-skill-${GITHUB_REF_NAME}.zip" okyline

@@ -1,14 +1,14 @@
-# Okyline Internal References — `$defs` and `$ref`
+# Okyline Internal References — `$defs` and `&Name`
 
 ## Overview
 
 Okyline supports **internal schema references** to promote reuse and consistency. References allow reusing schema fragments defined in `$defs`.
 
 Two use cases:
-1. **Property-level reference** — a field whose type comes from a definition (`field | $ref`)
-2. **Object-level reference** — an object that includes all fields from another schema (inheritance)
+1. **Property-level reference** — a field whose value `&Name` (or `["&Name"]`) qualifies the field as having the type of the referenced definition
+2. **Object-level reference** — an object that includes all fields from another schema (inheritance), via the special key `$ref` inside the object
 
-In Okyline, `$ref` is an **inclusion mechanism**: referenced schemas can be extended, overridden, or partially removed.
+References are an **inclusion mechanism**: referenced schemas can be extended, overridden, or partially removed.
 
 ---
 
@@ -59,6 +59,20 @@ In Okyline, `$ref` is an **inclusion mechanism**: referenced schemas can be exte
 - Entries are **not** JSON properties of validated instances — they are reusable definitions only
 - References target the **first level** of `$defs` only (no nested paths)
 
+### Collection Definitions
+
+The key of a `$defs` entry accepts the same constraint grammar as a field key (excluding `@` and `#`). A definition can therefore name a **collection type** (list or map, including leaf constraints) and be reached via `&Name`:
+
+```json
+{
+  "$oky": { "matrix|@ [*]": ["&Row"] },
+  "$defs": {
+    "Row|[*] -> (>=0)": [0]
+  }
+}
+```
+↳ `matrix` is `List<List<int>>`. Chains further (`&Cell` → `&Row` → `&Matrix`) to compose map-of-map, list-of-map, etc. at any depth.
+
 ---
 
 ## Reference Syntax — `&Name`
@@ -78,17 +92,17 @@ Examples: `&Address`, `&Email`, `&Person`
 
 ---
 
-## Property-Level References — `field | $ref`
+## Property-Level References
 
 ### Basic Syntax
 
-A field uses another schema as its type via the `$ref` constraint:
+A field uses another schema as its type when its value is `&Name`:
 
 ```json
 {
   "$oky": {
     "person": {
-      "address | $ref": "&Address",
+      "address": "&Address",
       "name|@ {2,50}": "Dupond"
     }
   },
@@ -105,21 +119,19 @@ The field behaves as if the referenced schema had been written inline.
 
 ### Target Types
 
-Property-level `$ref` MAY target:
+A property-level reference MAY target:
 - a scalar schema (number, string, boolean)
 - an object schema
 - an array schema
 
-### Arrays of Referenced Elements
+### Lists and Maps of Referenced Elements
 
 If the value is a **single-element array containing a reference**, the field is a list:
 
 ```json
 {
   "$oky": {
-    "addresses | $ref": [
-      "&Address"
-    ]
+    "addresses": ["&Address"]
   },
   "$defs": {
     "Address": {
@@ -130,11 +142,28 @@ If the value is a **single-element array containing a reference**, the field is 
 }
 ```
 
-Array size constraints can be combined:
+Array size constraints are added as standard structural constraints:
 
 ```json
-"addresses | $ref [1,10]": ["&Address"]
+"addresses|[1,10]": ["&Address"]
 ```
+
+A **map** field works the same way — a single-entry object whose value is a reference:
+
+```json
+"statsByRegion|[*:*]": { "region-1": "&Stat" }
+```
+
+### Polymorphic References
+
+A list or map field whose example holds **more than one** `&Name` (optionally mixed with inline values) is polymorphic — each element / value matches any of the variants:
+
+```json
+"events|@ [*]":       ["&Login", "&Logout"]
+"indicators|@ [*:*]": { "k1": "&Counter", "k2": "&Gauge" }
+```
+
+All variants MUST be the same kind — all scalar **or** all object; mixing fails at load.
 
 ### Constraint Categories
 
@@ -170,8 +199,8 @@ Example:
 {
   "$oky": {
     "user": {
-      "primaryEmail | $ref @": "&Email",
-      "backupEmail | $ref ?": "&Email"
+      "primaryEmail|@": "&Email",
+      "backupEmail|?": "&Email"
     }
   },
   "$defs": {
@@ -272,33 +301,8 @@ Effective schema:
 ### Rules
 
 - `$remove` MUST be an array of field names
-- Each field MUST exist in at least one referenced schema (otherwise → rejected)
-- `$remove` applies to **all** inherited schemas
-
-### Resolving Collisions with `$remove`
-
-```json
-{
-  "$oky": {
-    "Article": {
-      "$ref": ["&Auditable", "&Deletable"],
-      "$remove": ["updatedAt"],
-      "updatedAt|@ ~$DateTime~": "2025-06-15T10:30:00Z",
-      "title|@": "Mon article"
-    }
-  },
-  "$defs": {
-    "Auditable": {
-      "createdAt|@": "2025-01-01T00:00:00Z",
-      "updatedAt|@": "2025-01-01T00:00:00Z"
-    },
-    "Deletable": {
-      "deletedAt|@": "2025-01-01T00:00:00Z",
-      "updatedAt|@": "2025-01-01T00:00:00Z"
-    }
-  }
-}
-```
+- Each field MUST exist in the referenced schema (otherwise → rejected)
+- `$remove` MUST NOT be used when the referenced schema contains conditional rules (`$requiredIf`, etc.) or `$compute` expressions
 
 ---
 
@@ -309,7 +313,7 @@ Two directives to adapt a field inherited from a template:
 - **`$override`** — replaces the field entirely. Unspecified blocks are **erased**.
 - **`$amend`** — replaces only the specified blocks. Unspecified blocks are **kept from the base**.
 
-Both preserve field type, collection nature and `$ref` target (structural invariants).
+Both preserve field type, collection nature and reference target (structural invariants).
 
 ```json
 {
@@ -357,9 +361,8 @@ Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?
 | `$remove` targets non-existent field | Schema rejected |
 | `$override` or `$amend` targets non-existent field (after removes) | Schema rejected |
 | `$override` and `$amend` both on same field | Schema rejected |
-| `$override` or `$amend` changes type, collection nature or `$ref` target | Schema rejected |
+| `$override` or `$amend` changes type, collection nature or reference target | Schema rejected |
 | Local field collides with inherited (no `$override` or `$amend`) | Schema rejected |
-| Two base schemas define same field (not removed, no `$keep`) | Schema rejected |
 | Object-level cycle detected | Schema rejected |
 | Object-level `$ref` targets non-object schema | Schema rejected |
 | Object-level `$ref` targets definition with conditional rules | Schema rejected |
@@ -374,19 +377,18 @@ Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?
 | Scalar definition | `"Name\|constraints": example` | Reusable scalar type |
 | Object definition | `"Name": { fields }` | Reusable object schema |
 | Reference syntax | `&Name` | Points to `$defs` entry |
-| Property-level ref | `"field \| $ref": "&Name"` | Field typed by definition |
-| Property-level array | `"field \| $ref": ["&Name"]` | Array of definition type |
+| Property-level ref | `"field": "&Name"` | Field typed by definition |
+| Property-level array | `"field": ["&Name"]` | Array of definition type |
 | Object-level ref | `"$ref": "&Name"` | Include all fields from base |
-| Multiple inheritance | `"$ref": ["&A", "&B"]` | Include from multiple bases |
 | Remove field | `"$remove": ["field"]` | Exclude inherited field |
-| Keep on conflict | `"$keep": ["&A.field"]` | Choose which version to keep |
 | Override field | `"field \| $override ..."` | Replace inherited definition |
+| Amend field | `"field \| $amend ..."` | Adapt inherited field block-by-block |
 
 ---
 
-## Template Pattern — $ref + $override in Array Elements
+## Template Pattern — Object-Level `$ref` + `$override` in Array Elements
 
-A powerful pattern for typed structures that share a common base but need per-usage specialization. The `$ref` is placed inside the array element object, not on the array field itself.
+A powerful pattern for typed structures that share a common base but need per-usage specialization. The object-level `$ref` is placed inside the array element object, not on the array field itself.
 
 **Use case:** FHIR `Coding` — same structure everywhere, but `code` has different enum constraints per usage.
 
@@ -422,9 +424,9 @@ A powerful pattern for typed structures that share a common base but need per-us
 - The array field `coding|[*]` is a normal array — inheritance happens at element level
 - Multiple fields can be overridden if needed
 
-**Property-level `$ref` vs object-level `$ref` — when to use which:**
+**Property-level reference vs object-level `$ref` — when to use which:**
 
 | Pattern | Use when |
 |---------|----------|
-| `"period\|$ref\|": "&Period"` | The field IS a Period — no specialization needed |
+| `"period": "&Period"` | The field IS a Period — no specialization needed |
 | `{ "$ref": "&Coding", "code\|$override ...": ... }` | The object EXTENDS a base — needs per-usage specialization |

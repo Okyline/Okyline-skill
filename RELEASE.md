@@ -82,3 +82,12 @@ If any check fails, surface it to the user before proceeding.
 - The ZIP contains a top-level `okyline/` directory so users can extract directly into `~/.claude/skills/`.
 - `softprops/action-gh-release` updates the existing release (the one `gh release create` just created) rather than creating a duplicate.
 - If the workflow fails, the release exists but has no ZIP — re-run via `gh run rerun <run-id>` after fixing.
+
+## Local test builds (Windows)
+
+When building a ZIP locally on Windows to test the skill in Claude.ai *before* doing a real release, two pitfalls to avoid:
+
+1. **Path separators must be `/`, not `\`.** PowerShell's `Compress-Archive` writes entries like `okyline\SKILL.md` and Claude.ai rejects the upload with `Zip file contains path with invalid characters`. Use `System.IO.Compression.ZipArchive` directly and join entry names with `/`. Verify with `[System.IO.Compression.ZipFile]::OpenRead($zip).Entries | % FullName` — every path should contain `/`, never `\`.
+2. **Exclude the same files as the workflow.** Mirror the `rsync --exclude` list in `.github/workflows/release.yml`: `.git`, `.github`, `.claude`, `.idea`, `.gitignore`, `build`, `*.zip`, `RELEASE.md`. Otherwise the local ZIP ships internal files (notably this one) that the real release does not.
+
+The official CI workflow runs on Linux with `zip`, so neither issue applies to real releases — only to local test ZIPs.

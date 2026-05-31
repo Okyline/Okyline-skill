@@ -118,6 +118,8 @@ Conditional directives apply structural changes based on field values or existen
 
 `$else` and `$notExist` are independent: absent field triggers only `$notExist`, unmatched value triggers only `$else`.
 
+**Inside an `$appliedIf*` payload** you can declare fields and use presence directives (`$required`/`$forbidden`), structural groups (`$atLeastOne`/`$mutuallyExclusive`/`$exactlyOne`/`$allOrNone`) and value-list conditionals (`$requiredIf*`/`$forbiddenIf*`). You **cannot** nest another `$appliedIf*`, nor declare a `$field`, inside a payload.
+
 ---
 
 ## Null Literal in Conditions

@@ -4,12 +4,12 @@ description: >
   Expert assistant for the Okyline schema language — create, edit, and convert
   JSON validation schemas using declarative, example-driven syntax with inline constraints.
 metadata:
-  version: "2.0.0"
+  version: "2.2.0"
   author: Okyline
   repository: Okyline/Okyline-skill
 ---
 
-# Okyline Schema Language v1.6.0
+# Okyline Schema Language v1.7.0
 
 Okyline is a declarative language for describing and validating JSON structures using inline constraints on field names. Schemas are valid JSON documents with real example values.
 
@@ -18,17 +18,18 @@ Okyline is a declarative language for describing and validating JSON structures 
 **MANDATORY**: Read the reference files BEFORE producing an Okyline schema:
 
 1. `references/syntax-reference.md` — complete syntax of constraints
-2. `references/internal-references.md` — $defs and $ref
+2. `references/internal-references.md` — `$defs` and references (`&Name`)
 3. `references/conditional-directives.md` — if conditional logic
 4. `references/expression-language.md` — if $compute is necessary
 5. `references/virtual-fields.md` — if $field (virtual fields) is necessary
+6. `references/external-imports.md` — ONLY if `$deps`/`$import` are explicitly requested or already present in a loaded schema
 
 Never generate a schema based solely on this SKILL.md file.
 The examples here are a summary, not an exhaustive reference.
 
-## $ref: when to use
+## References: when to use
 
-Use `$defs`/`$ref` when:
+Use `$defs` + reference (`&Name`) when:
 1. **Recursion** (mandatory — only way to express recursive structures)
 2. **Repeated structures** identical across multiple usages (e.g. `Period`, `Address`)
 3. **Template pattern** — base structure specialized per usage via `$override` or `$amend` (e.g. `Coding`)
@@ -80,7 +81,7 @@ If a label is present without constraints, use `| |`:
 | `->` | Element validation constraint | `"tags\|[*] -> {2,10}": ["eco"]` |
 | `!` | Unique elements | `"codes\|[*]!": ["A","B"]` |
 | `#` | Key field (for object uniqueness) | `"id\|#": 123` |
-| `$ref` | Reference to definition (type indicator, not a validation constraint) | `"address\|$ref": "&Address"` |
+| `&Name` | Reference to definition (value-based, type indicator) | `"address": "&Address"` |
 
 
 ### Open-ended numeric constraints
@@ -201,7 +202,7 @@ These look similar but serve different purposes:
 ]
 ```
 
-## Reusable Definitions — `$defs` and `$ref`
+## Reusable Definitions — `$defs`
 
 Okyline supports **internal references** to promote reuse and consistency.
 
@@ -213,8 +214,8 @@ Okyline supports **internal references** to promote reuse and consistency.
 {
   "$oky": {
     "person": {
-      "address | $ref": "&Address",
-      "contact | $ref @": "&Email"
+      "address": "&Address",
+      "contact|@": "&Email"
     }
   },
   "$defs": {
@@ -231,36 +232,32 @@ Definitions can be **objects** or **scalars** (with constraints in the key).
 
 ### Reference Syntax — `&Name`
 
-References use `&` prefix: `&Address`, `&Email`, `&Person`
+References use `&` prefix: `&Address`, `&Email`, `&Person`. The `&` at the start of a value qualifies the field as a reference — no extra modifier required.
 
-### Property-Level Reference — `field | $ref`
+### Property-Level Reference
 
-A field uses another schema as its type:
+A field uses another schema as its type when its value is `&Name`:
 
 ```json
-"address | $ref @": "&Address"        // Required address
-"backup | $ref ?": "&Address"         // Optional, nullable
-"emails | $ref [1,5]": ["&Email"]     // Array of 1-5 emails
+"address|@": "&Address"          // Required address
+"backup|?": "&Address"           // Optional, nullable
+"emails|[1,5]": ["&Email"]       // Array of 1-5 emails
 ```
 
 **Structural constraints** (`@`, `?`, `[min,max]`, `!`) are defined locally at each usage.
 **Value constraints** (`{min,max}`, `(min..max)`, `~pattern~`) are inherited from the definition.
 
-### Important: `$ref` vs `->` for arrays
+### References vs `->` for arrays
 
-`$ref` and `->` serve different purposes:
-- `$ref` = type indicator (what the elements ARE) — comes BEFORE `->`
-- `->` = validation constraints (rules elements must satisfy) — comes AFTER `$ref`
+The two mechanisms serve different purposes:
+- **Reference** (`&Name` value) = type indicator (what the elements ARE)
+- `->` = validation constraints (rules elements must satisfy) — comes AFTER the array constraint
 
-For arrays of referenced types, `$ref` is placed with the array constraint, never after `->`:
+For arrays of referenced types, the reference is the value; `->` adds extra element constraints:
 ```json
-// Correct syntax
-"items|[*] $ref": ["&Item"]                    // Array of Item references
-"items|[1,10] $ref": ["&Item"]                 // Array of 1-10 Item references  
-"items|[*] $ref -> {2,50}": ["&Item"]          // With additional element constraint
-
-// Wrong syntax - $ref must never be after ->
-❌ "items|[*] -> $ref": ["&Item"]
+"items|[*]": ["&Item"]                    // Array of Item references
+"items|[1,10]": ["&Item"]                 // Array of 1-10 Item references
+"items|[*] -> {2,50}": ["&Item"]          // With additional element constraint
 ```
 
 ### Object-Level Reference — Inheritance
@@ -292,7 +289,7 @@ Include all fields from a base schema:
 | `$override` | `"field \| $override ...": value` | Replace inherited field entirely (unspecified blocks are erased) |
 | `$amend` | `"field \| $amend ...": value` | Adapt inherited field block-by-block (unspecified blocks are kept from base) |
 
-Both `$override` and `$amend` preserve type, collection nature and `$ref` target. In an `$appliedIf` branch, redefining a parent field without `$override` or `$amend` is a parsing error.
+Both `$override` and `$amend` preserve type, collection nature and reference target. In an `$appliedIf` branch, redefining a parent field without `$override` or `$amend` is a parsing error.
 
 ## Choosing the Right Conditional Mechanism
 
@@ -342,7 +339,7 @@ Before delivering a schema, verify:
 - [ ] No empty arrays `[]` — at least one element for type inference
 - [ ] Decimals ending in .00 quoted as strings (`"78.00"` not `78.00`)
 - [ ] Element constraints use `->` (not applied directly to array field)
-- [ ] `$ref` before `->`, never after
+- [ ] References use `&Name` as the field value (no `|$ref` modifier needed)
 - [ ] `$compute` expressions attached to fields with `|(%Name)`
 - [ ] No two `(...)` constraint blocks on the same field
 - [ ] Labels use `| |Label` syntax (not `|Label`)
@@ -356,8 +353,9 @@ For detailed syntax and features, consult these references:
 - **Constraint syntax & patterns**: See [references/syntax-reference.md](references/syntax-reference.md)
 - **Conditional directives**: See [references/conditional-directives.md](references/conditional-directives.md)
 - **Expression language ($compute)**: See [references/expression-language.md](references/expression-language.md)
-- **Internal references ($defs, $ref)**: See [references/internal-references.md](references/internal-references.md)
+- **Internal references (`$defs`, `&Name`)**: See [references/internal-references.md](references/internal-references.md)
 - **Virtual fields ($field)**: See [references/virtual-fields.md](references/virtual-fields.md)
+- **External imports (`$deps`, `$import`)**: See [references/external-imports.md](references/external-imports.md) — load only if user explicitly requests modularization or a loaded schema already uses these
 
 ## Quick Patterns
 
@@ -384,25 +382,25 @@ For detailed syntax and features, consult these references:
 "translations|[~^[a-z]{2}$~:10]": {"en": "Hello", "fr": "Bonjour"}
 
 // Reference to definition (required)
-"address | $ref @": "&Address"
+"address|@": "&Address"
 
-// Array of referenced type ($ref before ->, never after)
-"items | $ref @ [1,100]": ["&OrderItem"]
+// Array of referenced type
+"items|@ [1,100]": ["&OrderItem"]
 
 // Array of referenced type with element constraint
-"codes | $ref [1,10] -> {2,20}": ["&Code"]
+"codes|[1,10] -> {2,20}": ["&Code"]
 
-// Object inheritance
+// Object inheritance (object-level $ref key — unchanged)
 "$ref": "&Auditable"
 
-// Template pattern — $ref + $override inline in array element
+// Template pattern — object-level $ref + $override inline in array element
 "coding|[*]": [{
   "$ref": "&Coding",
   "code|$override @ ($MARITAL_STATUS)|Code": "M"
 }]
 
-// Property-level $ref (field IS the type, no specialization)
-"period|$ref||Validity period": "&Period"
+// Property-level reference (field IS the type, no specialization)
+"period| |Validity period": "&Period"
 
 // $amend — adapt inherited field keeping base constraints
 "email|$amend @": "alice@corp.com"
@@ -443,8 +441,8 @@ For detailed syntax and features, consult these references:
         }
       }
     },
-    "shipping|@ $ref|Shipping address": "&Address",
-    "billing|? $ref|Billing if different": "&Address",
+    "shipping|@|Shipping address": "&Address",
+    "billing|?|Billing if different": "&Address",
     "lines|@ [1,50] -> !|Order lines": [
       {
         "sku|# ~$Sku~": "PRD-00123",
@@ -507,27 +505,33 @@ For detailed syntax and features, consult these references:
 
 ```json
 {
-  "$okylineVersion": "1.5.0",
+  "$okylineVersion": "1.7.0",
   "$version": "1.0.0",
   "$id": "my-schema",
+  "$state": "DRAFT",
   "$title": "My Schema",
   "$description": "Schema description",
   "$additionalProperties": false,
   "$sequence": false,
+  "$decimalScale": 6,
   "$oky": {
     ...
   },
+  "$entries": { "Create": "&Item", "Update": "&ItemPatch" },
   "$defs": { ... },
   "$format": { "Code": "^[A-Z]{3}-\\d{4}$" },
   "$compute": { "Total": "price * quantity" },
   "$nomenclature": { "STATUS": "ACTIVE,INACTIVE" }
 }
-
-
-**`$id` format**: Only letters, digits, underscores and dots allowed. Pattern: `^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)*$`
- ❌ `"personne-vehicules"` (hyphen not allowed)
- ✅ `"personne.vehicules"` or `"personne_vehicules"`
 ```
+
+- **`$id` format**: only letters, digits, underscores and dots. Pattern: `^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)*$`
+  ❌ `"personne-vehicules"` (hyphen not allowed)
+  ✅ `"personne.vehicules"` or `"personne_vehicules"`
+- **`$version`**: Semver 2.0.0 (`"1.0.0"`, `"2.0.0-rc.1"`). Pure metadata unless the schema is published or imported.
+- **`$state`**: `"DRAFT"` (default, mutable) or `"FINAL"` (frozen, immutable). Omit unless lifecycle is meaningful.
+- **`$decimalScale`**: root-level only. Decimal precision for numeric comparisons, ranges and computes (default `6`, max `18`).
+- **`$entries`**: extra validation entry points within one schema; values are local `&Name` references. Default target stays `$oky` when no entry is supplied. Only declare when consumers need to validate distinct payload shapes from the same contract.
 
 
 ## Structural Group Directives
@@ -573,7 +577,7 @@ To validate a constraint across an array from root context, attach the compute t
 - Forgetting to escape backslashes in regex (`\d` → `\\d`)
 - Defining `$compute` expressions without attaching them to fields with `|(%Name)`
 - Using absolute paths in `$compute` instead of relative references to parent context
-- Using `$ref` without the `&` prefix (correct: `"&Address"`, wrong: `"Address"`)
+- Reference value without the `&` prefix (correct: `"&Address"`, wrong: `"Address"` — without `&` it would be a plain string example)
 - Object-level `$ref` targeting a scalar definition (must target object schema)
 - Redefining an inherited field without using `$override` or `$amend`
 - Creating circular object-level references (A includes B includes A)
@@ -584,10 +588,10 @@ To validate a constraint across an array from root context, attach the compute t
   ✅ `"permis|@ -> ('A','B','C')": ["B"]`
   ✅ `"permis|@ [1,5] -> ('A','B','C')": ["B"]`
 - Using hyphens in `$id` — only letters, digits, underscores and dots are allowed
-- Placing `$ref` after `->` for arrays of references (`$ref` is a type indicator, not a validation constraint):
-  ❌ `"children|[*] -> $ref": ["&Node"]`
-  ✅ `"children|[*] $ref": ["&Node"]`
-  ✅ `"children|[1,10] $ref -> {2,50}": ["&Node"]`
+- Misplacing the reference for arrays of references — the `&Name` is the value, not a constraint to put after `->`:
+  ❌ `"children|[*] -> &Node": []`
+  ✅ `"children|[*]": ["&Node"]`
+  ✅ `"children|[1,10] -> {2,50}": ["&Node"]`
 - Using open-ended range syntax `(0..)` or `(..100)` — these don't exist!
   ❌ `"price|(0..)": 29.99`
   ✅ `"price|(>=0)": 29.99`

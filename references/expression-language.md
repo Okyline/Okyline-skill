@@ -1,4 +1,4 @@
-# Okyline Expression Language (1.6.0)
+# Okyline Expression Language (1.7.0)
 
 Used in `$compute` blocks for business rules, cross-field validation, and calculated constraints.
 
@@ -281,13 +281,15 @@ Retrieve a single element. All null-safe (null list / empty / no match / out of 
 | `lastOf(coll)` | Last element, null if empty |
 | `findFirst(coll, pred)` | First matching element, null otherwise |
 | `findLast(coll, pred)` | Last matching element (reverse scan), null otherwise |
-| `at(coll, idx)` | Element at `idx` (0-based), null if out of bounds or negative |
+| `at(coll, idx)` | Element at numeric `idx` (0-based, list/array, or positional access on map values), null if out of bounds / negative |
+| `at(map, "key")` | Value for string `key` (map only — `at(list, "0")` returns null, no implicit String→Integer) |
 
 ```js
 firstOf(items)                          // first element
 findFirst(lines, cat == 'S')            // first where predicate true
 findLast(events, type == 'UPDATE')      // last match (scans from the end)
-at(payments, 0)                         // element by index
+at(payments, 0)                         // element by numeric index
+at(stats, "alice")                      // value by map key
 ```
 
 ### Member access on any expression

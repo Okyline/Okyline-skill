@@ -31,7 +31,7 @@ Virtual fields are computed values that exist only during validation. Use them w
 - Names MUST NOT collide with actual field names or `$appliedIf` payload fields
 - No forward references — a `$field` can only reference virtual fields declared **before** it
 - Declared at object level only, not inside `$appliedIf` payloads
-- **Scope:** local to the declaring object — not visible in children, not inherited via `$ref`
+- **Scope:** local to the declaring object — not visible in children, not inherited via object-level `$ref`
 - **Restriction:** MUST NOT be used in existence-based directives (`$requiredIfExist`, etc.) — use `fieldName(null)` instead
 
 ## Chaining

@@ -22,6 +22,8 @@ Restricts character length (Unicode code points).
 "username|{3,20}": "alice"     // min 3, max 20
 "city|{50}": "Paris"           // max 50 (no minimum)
 "code|{5,5}": "ABC12"          // exactly 5
+"bio|{3,*}": "hi there"        // min 3, no maximum
+"notes|{*}": "free text"       // any length
 ```
 
 ### `(...)` - Value Constraints
