@@ -52,7 +52,10 @@ If any check fails, surface it to the user before proceeding.
    gh run list --workflow=release.yml --limit 1
    gh release view vX.Y.Z
    ```
-   The release should now contain `okyline-skill-vX.Y.Z.zip`.
+   The release should now contain two identical archives: `okyline-skill-vX.Y.Z.zip` and
+   `okyline-skill.zip`. The unversioned one is what the stable link
+   `https://github.com/Okyline/Okyline-skill/releases/latest/download/okyline-skill.zip` serves — link to
+   that URL, never to a versioned file name under `latest`, which breaks at the next release.
 
 ## Release notes template
 

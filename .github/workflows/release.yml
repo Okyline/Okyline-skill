@@ -28,8 +28,13 @@ jobs:
                    ./ build/okyline/
           cd build
           zip -r "okyline-skill-${GITHUB_REF_NAME}.zip" okyline
+          # Same archive under a stable name: releases/latest/download/okyline-skill.zip always
+          # serves the latest release, so download links never have to change.
+          cp "okyline-skill-${GITHUB_REF_NAME}.zip" okyline-skill.zip
 
-      - name: Attach ZIP to release
+      - name: Attach ZIPs to release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/okyline-skill-${{ github.ref_name }}.zip
+          files: |
+            build/okyline-skill-${{ github.ref_name }}.zip
+            build/okyline-skill.zip
