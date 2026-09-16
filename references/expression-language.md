@@ -1,4 +1,4 @@
-# Okyline Expression Language (1.7.0)
+# Okyline Expression Language (1.8.0)
 
 Used in `$compute` blocks for business rules, cross-field validation, and calculated constraints.
 
@@ -17,15 +17,16 @@ Used in `$compute` blocks for business rules, cross-field validation, and calcul
 }
 ```
 
-**Reference compute in validation:** `|(%ComputeName)`
+**Reference compute in validation:** `|(%ComputeName)` - the expression must yield a boolean.
 **Reference compute in expression:** `%ComputeName`
+**Compute as condition operand:** `"$requiredIf amount(%IsHigh)": [...]` - evaluated with `it` bound to `amount`; the condition holds when the compute yields `true`.
 
 ## Context Rule
 
-A `$compute` expression is always evaluated in the context of the **object that directly contains the annotated field**. All properties of that object are accessible — including sibling arrays and nested objects.
+A `$compute` expression is always evaluated in the context of the **object that directly contains the annotated field**. All properties of that object are accessible - including sibling arrays and nested objects.
 
 ```json
-// The annotated field is inside a line item — context = the current element
+// The annotated field is inside a line item - context = the current element
 "lignes|[*]": [{
   "quantite": 5,
   "prix": 100.0,
@@ -34,7 +35,7 @@ A `$compute` expression is always evaluated in the context of the **object that 
 "$compute": { "Check": "montantHT == quantite * prix" }
 ```
 
-> The same rule applies at any depth. When the annotated field is at the root, the containing object is the document root — all root-level arrays and fields are accessible.
+> The same rule applies at any depth. When the annotated field is at the root, the containing object is the document root - all root-level arrays and fields are accessible.
 
 ---
 
@@ -46,14 +47,34 @@ A `$compute` expression is always evaluated in the context of the **object that 
 | `-` | Subtraction | `5 - 2 → 3` | Null propagates |
 | `*` | Multiplication | `3 * 2 → 6` | Null propagates |
 | `/` | Division | `6 / 2 → 3.0` | Null propagates; div by zero → null |
-| `>` `<` `>=` `<=` | Comparison | `age > 18` | Returns null if operand is null |
-| `==` `!=` | Equality | `"A" == "A"` | null == null → true |
-| `===` `!==` | Strict equality | `1.0 === 1.0` | IEEE-754 bit-exact |
+| `>` `<` `>=` `<=` | Comparison | `age > 18` | Returns false if an operand is null |
+| `==` `!=` | Equality: numbers exactly at `$decimalScale`, lists element by element, objects member by member in any order; `{"a": null}` ≠ `{}` | `"A" == "A"` | null == null → true |
 | `&&` | Logical AND | `a && b` | null → false |
 | `||` | Logical OR | `a || b` | null → false |
 | `!` | Negation | `!true → false` | !null → true |
 | `??` | Null coalescing | `price ?? 0` | Returns right if left is null |
 | `? :` | Ternary | `x > 10 ? "hi" : "lo"` | Condition null → false |
+
+---
+
+## Fixed-point arithmetic
+
+Every number carries at most `$decimalScale` decimals (root key, default 6). Every operation rounds its result to that scale, `HALF_UP`, before it is used further; operations between integers are exact. No binary floating point ever appears: `0.1 + 0.2` is exactly `0.3`.
+
+Consequences:
+- `*` is not associative and `/` does not round-trip: at scale 2, `(1.11 * 1.11) * 100` → `123.00` but `1.11 * (1.11 * 100)` → `123.21`; `(10 / 3) * 3` → `9.99`.
+- `==` compares **exactly** at the scale. To compare a business value defined at fewer decimals, round explicitly: `total == round(sum(lines, qty * price), 2)`.
+- Declare `$decimalScale` above the precision of the data so that intermediate products are not rounded away.
+- `sqrt`, `log`, `log10` and `pow` with a non-integer exponent round to 15 significant digits; outside their domain they yield `null`, as does a division by zero.
+- Rounding modes for `round(x, scale, mode)`: `HALF_UP` (default), `HALF_DOWN`, `HALF_EVEN`, `UP`, `DOWN`, `CEILING`, `FLOOR`. An unknown mode written as a literal is a load error.
+
+---
+
+## Identifiers and load-time checks
+
+- A field name reached from an expression is a `segment` (`letter | _ | @ | $` then letters, digits, `_`), joined by `.`: `parent.total`, `@type`, `$oid`. A segment never starts with a digit, `a$b` is not a name; a field whose name contains `-` or a space is reached with `at(this, 'my-field')`.
+- A bare `$NAME` in an expression is a **field**; a nomenclature is always a quoted string, `'$NAME'`.
+- Rejected when the schema is loaded: an unknown function, a wrong number of arguments, an unknown compute, a circular reference, a `matches()` whose format is not a `'$Name'` literal or is unknown, a literal rounding mode outside the seven names.
 
 ---
 
@@ -106,11 +127,12 @@ Declare formal parameters with `"Name(p1, p2)": "body"`; call with matching argu
 },
 "$oky": {
   "age|(%InRange(18, 120))": 30,
-  "rateS|(%RateCheck('S'))": 20
+  "category|('S','M')": "S",
+  "rate|(%RateCheck('S'))": 20
 }
 ```
 
-- Params are local to the body; they **shadow** sibling fields of the same name — use `this.field` to unshadow.
+- Params are local to the body; they **shadow** sibling fields of the same name - use `this.field` to unshadow.
 - On a field constraint (`|(%F(args))`), args are limited to **literals or dotted paths**. Full expressions are allowed when calling from another compute body.
 - Arity is strict: a mismatch is a schema load error. A bare `%Name` reference (no parens) is reserved for arity 0.
 - Params must not collide with special variables (`it`, `parent`, `root`, `index`, `size`, `prev`, `next`, `first`, `last`, `origin`, `isOrigin`, `isFirst`, `isLast`, `this`).
@@ -140,9 +162,9 @@ Declare formal parameters with `"Name(p1, p2)": "body"`; call with matching argu
 | `round(x, scale?, mode?)` | Round (HALF_UP default) | `round(3.5, 0) → 4.0` |
 | `mod(a, b)` | Remainder | `mod(10, 3) → 1` |
 | `pow(base, exp)` | Power | `pow(2, 3) → 8.0` |
-| `log(x)` | Natural logarithm | `log(2.71828) → 1.0` |
+| `log(x)` | Natural logarithm (null outside domain) | `log(1) → 0` |
 | `log10(x)` | Base-10 logarithm | `log10(1000) → 3.0` |
-| `toInt(v)` | Convert to integer | `toInt(3.7) → 4` |
+| `toInt(v)` | Convert to integer, rounding HALF_UP | `toInt(3.7) → 4` |
 | `toNum(v)` | Convert to number | `toNum("42") → 42.0` |
 | `toStr(v)` | Convert to string | `toStr(42) → "42"` |
 
@@ -183,6 +205,7 @@ Declare formal parameters with `"Name(p1, p2)": "body"`; call with matching argu
 | `indexOf(s, sub)` | First index of substring | `indexOf("abracadabra", "bra") → 1` |
 | `indexOfFirst(s, sub)` | Alias for indexOf | `indexOfFirst("abracadabra", "bra") → 1` |
 | `indexOfLast(s, sub)` | Last index of substring | `indexOfLast("abracadabra", "bra") → 8` |
+| `matches(s, '$Format')` | True if `s` matches a named format: a `$format` of the contract or a built-in; the second argument is a `'$Name'` literal | `matches(ref, '$Email') → true` |
 
 ### String ↔ List
 
@@ -259,7 +282,7 @@ Operate on **object collections**, **scalar collections** (numbers, strings, boo
 **Inside aggregation lambdas:**
 - For **object collections**, reference properties by name (`price`, `qty`).
 - For **scalar collections**, reference the current element via `it`.
-- `it` is **rebound** locally to the lambda — once the aggregation completes, `it` reverts to the outer field value.
+- `it` is **rebound** locally to the lambda - once the aggregation completes, `it` reverts to the outer field value.
 
 **Compute reference in aggregations:**
 ```json
@@ -282,7 +305,7 @@ Retrieve a single element. All null-safe (null list / empty / no match / out of 
 | `findFirst(coll, pred)` | First matching element, null otherwise |
 | `findLast(coll, pred)` | Last matching element (reverse scan), null otherwise |
 | `at(coll, idx)` | Element at numeric `idx` (0-based, list/array, or positional access on map values), null if out of bounds / negative |
-| `at(map, "key")` | Value for string `key` (map only — `at(list, "0")` returns null, no implicit String→Integer) |
+| `at(map, "key")` | Value for string `key` (map only - `at(list, "0")` returns null, no implicit String→Integer) |
 
 ```js
 firstOf(items)                          // first element
@@ -303,7 +326,7 @@ findFirst(lines, cat == 'S').amount > 100
 at(payments, 0).status
 ```
 
-- Dotted paths on bare identifiers (`parent.x.y`) are unchanged — the postfix `.field` applies only after `)` or `]`.
+- Dotted paths on bare identifiers (`parent.x.y`) are unchanged - the postfix `.field` applies only after `)` or `]`.
 - Resolution on a `null` base → `null`.
 
 ---
@@ -339,7 +362,7 @@ Defined in `$nomenclature`, referenced in field constraints with `($NAME)` or in
 
 The two forms cannot be mixed within a single entry.
 
-- For **validation** (`($NAME)`), keys are the allowed values — both forms accept the same inputs.
+- For **validation** (`($NAME)`), keys are the allowed values - both forms accept the same inputs.
 - Associated values are accessible via `lookup(key, '$NAME')` for data-driven transformations.
 
 ```js
@@ -349,7 +372,7 @@ lookup(letter, '$IbanLetters')
 
 ---
 
-## Membership Function — `in`
+## Membership Function - `in`
 
 Tests whether a value belongs to a set.
 
@@ -364,16 +387,17 @@ Tests whether a value belongs to a set.
 
 ---
 
-## Lookup Function — `lookup`
+## Lookup Function - `lookup`
 
-Retrieves a value from a JSON object used as a key/value map.
+Retrieves a value by key, from a JSON object used as a map or from a key-value nomenclature.
 
 ```js
-lookup(currency, rates)              // → value at key, or null
+lookup(currency, rates)              // → value at key of the object field, or null
+lookup(letter, '$IbanLetters')       // → value of the key in a key-value nomenclature, or null
 lookup(currency, rates) ?? 1.0       // with fallback
 ```
 
-- `null` key, `null` source, or non-object source → `null`
+- `null` key, `null` source, non-object source, or a nomenclature without values → `null`
 - Returns the raw value (no coercion); use `toNum`, `toStr` if needed
 
 ---
@@ -402,7 +426,7 @@ Inside aggregation lambdas (`countIf`, `exists`, `filter`, `sum`, etc.), these v
 
 All support dotted navigation: `origin.amount`, `prev.date`, `first.id`.
 
-**Example — uniqueness check:**
+**Example - uniqueness check:**
 ```json
 {
   "$compute": {
@@ -430,8 +454,8 @@ null * 5      → null
 
 ### Comparison
 ```js
-10 > null     → null
-null <= 5     → null
+10 > null     → false
+null <= 5     → false
 ```
 
 ### Equality
@@ -468,9 +492,9 @@ a ?? b ?? c ?? 0        → first non-null or 0
         {"price": 15.0, "quantity": 3, "vat": 0.1}
       ],
       "discount": 5.0,
-      "shippingCost": null,
+      "shippingCost|?": 10.0,
       "subtotal|(%CheckSubtotal)": 65.0,
-      "total|(%CheckTotal)": 71.5
+      "total|(%CheckTotal)": 78.5
     }
   },
   "$compute": {
@@ -484,6 +508,6 @@ a ?? b ?? c ?? 0        → first non-null or 0
 
 **Explanation:**
 1. `LineGross` calculates gross amount per line (price × quantity × (1 + vat))
-2. `Shipping` defaults to 10.0 if null
-3. `CheckSubtotal` validates subtotal equals sum of (price × quantity)
-4. `CheckTotal` validates total equals sum of gross amounts minus discount plus shipping
+2. `Shipping` defaults to 10.0 when `shippingCost` is null (the field is nullable, `?`)
+3. `CheckSubtotal` validates subtotal equals sum of (price × quantity): 20 + 45 = 65.0
+4. `CheckTotal` validates total equals sum of gross amounts minus discount plus shipping: 24.00 + 49.50 - 5.0 + 10.0 = 78.5

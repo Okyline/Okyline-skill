@@ -168,6 +168,7 @@ The `null` literal can be used in value-based conditions to test if a field's va
 {
   "$oky": {
     "archived": true,
+    "active": false,
     "sku": "SKU-12345",
     "internalCode": "INT-999",
     
@@ -185,6 +186,7 @@ The `null` literal can be used in value-based conditions to test if a field's va
 {
   "$oky": {
     "tracking": "ABC123",
+    "email|~$Email~": "alice@example.com",
     "$appliedIfExist tracking": {
       "carrier|@": "DHL",
       "estimatedDelivery|@ ~$Date~": "2025-12-25"
@@ -228,10 +230,10 @@ Type Guards check the **runtime type** of a field value in conditions.
   "$oky": {
     "data": "example",
     "$appliedIf data(_String_)": {
-      "length": 7
-    },
-    "$else": {
-      "type": "non-string"
+      "length": 7,
+      "$else": {
+        "type": "non-string"
+      }
     }
   }
 }
@@ -241,7 +243,7 @@ Type Guards check the **runtime type** of a field value in conditions.
 ```json
 {
   "$oky": {
-    "value": null,
+    "value|?": "example",
     "$appliedIf value(_String_,_Null_)": {
       "isTextOrEmpty": true
     }
@@ -254,6 +256,7 @@ Type Guards check the **runtime type** of a field value in conditions.
 {
   "$oky": {
     "items": [1, 2, 3],
+    "sum": 6,
     "$requiredIf items(_ListOfInteger_)": ["sum"]
   }
 }
@@ -297,7 +300,7 @@ These directives constrain which fields from a group must be present, without co
 }
 ```
 
-> **Suffix mechanism:** To declare multiple independent groups of the same directive in one object, append a unique suffix after `_`. The suffix is semantically ignored.
+> **Suffix mechanism:** To declare several independent groups of `$atLeastOne`, `$mutuallyExclusive`, `$exactlyOne` or `$allOrNone` in one object, append a unique suffix after `_`. The suffix is semantically ignored. Structural groups only: no suffix on `$requiredIf*`, `$forbiddenIf*`, `$required` or `$forbidden`.
 
 ```json
 "$mutuallyExclusive_deceased": ["deceasedBoolean", "deceasedDateTime"],
@@ -306,7 +309,7 @@ These directives constrain which fields from a group must be present, without co
 "$exactlyOne_procedure": ["procedureCodeableConcept", "procedureReference"]
 ```
 
-Note: `$exactlyOne` is a required `$mutuallyExclusive` — at most one, and at least one.
+Note: `$exactlyOne` is a required `$mutuallyExclusive` - at most one, and at least one.
 
 ---
 
@@ -353,6 +356,9 @@ Note: `$exactlyOne` is a required `$mutuallyExclusive` — at most one, and at l
 - `fieldName(_TypeGuard_)` - type check
 - `fieldName(_Type1_,_Type2_)` - multiple types (OR)
 
+**Computed conditions:**
+- `fieldName(%ComputeName)` - the compute runs with `it` bound to the field's value; the condition holds when it yields `true`. `"$requiredIf amount(%IsHigh)": ["approver"]` with `"IsHigh": "it > 10000"`.
+
 ---
 
 ## Path Expressions
@@ -366,21 +372,42 @@ Conditions can reference fields outside the current object using path prefixes:
 | `parent.` | Nearest parent object (skips arrays) |
 | `root.` | Document root |
 
-**Note:** `parent` skips over arrays — it always refers to the nearest parent **object**, not the array containing the current item.
+**Note:** `parent` skips over arrays - it always refers to the nearest parent **object**, not the array containing the current item.
 
 ```json
-// No prefix — current object (default)
+// No prefix - current object (default)
 "$requiredIf status('ACTIVE')": ["workDays"]
 
-// parent. — condition on the object containing this array
+// parent. - condition on the object containing this array
 "items|[*]": [{
   "code": "ABC",
   "$requiredIf parent.type('DETAILED')": ["description"]
 }]
 
-// root. — condition on the document root
+// root. - condition on the document root
 "$requiredIf root.accountType('BUSINESS')": ["taxId"]
 
-// this. — explicit current object (same as no prefix, useful for clarity)
+// this. - explicit current object (same as no prefix, useful for clarity)
 "$requiredIf this.role('ADMIN')": ["accessLevel"]
 ```
+
+---
+
+## Load-time checks (since 1.8.0)
+
+A directive is checked when the schema is loaded. Each of the following is a **schema error**, not a rule that silently never fires:
+
+| Check | Rejected | Accepted |
+|-------|----------|----------|
+| Every field named by a trigger, a target list, `$required`, `$forbidden` or a structural group is declared in the object; `$additionalProperties: true` does not exempt it | `"$exactlyOne": ["email", "phon"]` with `phone` declared | `"$exactlyOne": ["email", "phone"]` |
+| A condition literal has the declared type of the field; no implicit conversion | `active('true')` on a boolean, `age('18')` on an integer, `code(12)` on a string | `active(true)`, `age(18)`, `code('12')` |
+| A condition value is one the field can take: inside its nomenclature, enum, range or pattern; each listed value is judged on its own | `status('LEGACY')` when `$STATUS` has no `LEGACY`; `qty(1.5)` on an integer field | `status('ACTIVE')`; `qty(>1.5)` (means `>= 2`) |
+| Ordering and ranges are not meaningful on booleans | `active(>true)` | `active(true)` |
+| A value condition needs a scalar field; an object, a `$ref` or a collection takes only a type guard | `address('X')`, `items(>0)` | `items(_ListOfObject_)` |
+| A path names a declared field and never crosses a list; `parent` is not used at the root | `lines.total(>0)`, `parent.x('A')` at the root | the directive written inside the list element |
+| A conditional block accepts only field declarations, `$required`, `$forbidden`, the four structural groups, `$requiredIf*` / `$forbiddenIf*`, `$else`, `$notExist` | `$ref`, `$remove`, `$additionalProperties`, `$sequence`, `$appliedIf*`, `$field` in a branch | fields declared directly in the branch |
+| A field of the parent level redefined in a branch carries `$override` or `$amend` | `{ "name\|@ {2,100}": "…" }` in a branch when `name` exists above | `{ "name\|$amend {2,100}": "…" }` |
+
+Under a negated directive (`$requiredIfNot`, `$forbiddenIfNot`) an impossible condition is always true instead of never true; it is rejected all the same.
+
+A rule inherited from a `$defs` template is judged where the template is used; a directive that only reaches outside its object (`parent.`, `root.`) is judged at the usage site.

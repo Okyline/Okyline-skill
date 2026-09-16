@@ -102,7 +102,10 @@ Indicates example is also the default. Does not affect validation.
 "codes|[10,*]": ["A"]          // at least 10 items
 "letters|[5]": ["A"]           // max 5 items
 "items|[*]": ["x"]             // any size
+"tags|[0,10]": []              // empty example: elements untyped, any value accepted
 ```
+
+An empty example (`[]`, or `{ }` for a map) leaves the elements untyped: only the size and the key pattern apply. A constraint that needs a type is rejected at load: `"tags|[0,10] -> {2,20}": []` and `"tags|[*] -> !": []` are errors. Prefer one real element when the elements have a type.
 
 ### `->` - Element Constraints
 Applies constraints to each element.
@@ -115,10 +118,11 @@ Applies constraints to each element.
 ### `!` - Uniqueness
 All elements must be unique.
 ```json
-// Scalar uniqueness
-"codes|[*]!": ["A", "B", "C"]
+// Scalar uniqueness - `!` goes after `->`, with the other element constraints
+"codes|[*] -> !": ["A", "B", "C"]
+"tags|[1,5] -> {2,10}!": ["eco", "bio"]
 
-// Object uniqueness (by # key fields)
+// Object uniqueness (by # key fields - a list of objects needs at least one `#`)
 "items|[*] -> !": [
   {"sku|#": "ABC", "name": "Product A"},
   {"sku|#": "DEF", "name": "Product B"}
@@ -151,9 +155,9 @@ Maps are objects with dynamic keys. Syntax: `[key_pattern:max_entries]`
 ## Polymorphism
 
 ### `$oneOf` - Exclusive Match
-Value must match exactly ONE schema.
+Value must match exactly ONE schema. An array example is a **list** unless `$obj` says the field is a single value: write `$obj $oneOf` for one object, `[*] $oneOf` for a list whose elements each take one of the variants.
 ```json
-"payment|@ $oneOf": [
+"payment|@ $obj $oneOf": [
   {"type|@ ('card')": "card", "cardNumber|@ {16}": "1234567812345678"},
   {"type|@ ('paypal')": "paypal", "email|@ ~$Email~": "user@example.com"},
   {"type|@ ('bank')": "bank", "iban|@ {15,34}": "FR76..."}
@@ -187,7 +191,7 @@ Value must match at least one schema.
 }
 ```
 
-**Key-value form** (since 1.5.0) — associates a value with each key:
+**Key-value form** (since 1.5.0) - associates a value with each key:
 ```json
 {
   "$nomenclature": {
@@ -196,7 +200,7 @@ Value must match at least one schema.
 }
 ```
 - The two forms cannot be mixed within a single entry.
-- For validation (`($NAME)`), keys are the allowed values — both forms behave identically.
+- For validation (`($NAME)`), keys are the allowed values - both forms behave identically.
 - Values are accessible via `lookup(key, '$NAME')` in expressions.
 
 ### `$format` - Reusable Patterns
@@ -247,32 +251,47 @@ Value must match at least one schema.
 
 ```json
 {
-  "$okylineVersion": "1.4.0",      // Okyline spec version
-  "$version": "1.0.0",             // Schema version (required for registry)
-  "$id": "namespace.schema-name",  // Unique identifier, 
+  "$id": "namespace.schema_name",  // Unique identifier
+  "$version": "1.0.0",             // Schema version (required only to publish)
+  "$state": "DRAFT",               // "DRAFT" (default), "DRAFT-FINAL" or "FINAL"
   "$title": "Schema Title",
   "$description": "Description",
   "$additionalProperties": false,  // Reject unknown fields (default: false)
-  
-  "$oky": { ... }                  // REQUIRED: schema definition
-  
+  "$sequence": false,              // Enforce field order (default: false)
+  "$decimalScale": 6,              // Decimals carried by numbers in computes (default: 6)
+
+  "$oky": { ... },                 // REQUIRED: schema definition ("$oky": null for a library of definitions)
+
+  "$entries": { ... },             // Extra validation targets (see internal-references.md)
+  "$defs": { ... },
   "$nomenclature": { ... },
   "$format": { ... },
-  "$compute": { ... },
-  
+  "$compute": { ... }
 }
+```
 
-Important : 
-- `$id` format: `^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)*$`
-    - Must not start or end with `.`
-    - Must not contain consecutive dots (`..`)
-    - Each segment must start with a letter
+Important:
+- `$id` format: `^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)*$` - letters, digits, underscores and dots; no hyphen; no leading, trailing or double dot.
+- Root keys are closed: an unknown `$` key at the root fails loading. No order is imposed.
+- `$okylineVersion` is indicative only: do not generate it.
+- A `$nomenclature`, `$format` or `$compute` key may carry a label after `|`: `"STATUS | Account status": "ACTIVE,INACTIVE"`.
+
+### Field names starting with `$` or `@`
+
+A key starting with `$` is a directive, unless the first non-blank character after the initial word is a `|`: it is then a field, whose name may look like a directive. `@` needs no such mark. Both are reachable from conditions and expressions.
+
+```json
+"$oid|@ {24}": "507f1f77bcf86cd799439011"     // a MongoDB field named $oid
+"@type|@ ('Person','Organization')": "Person" // a JSON-LD field named @type
+"$appliedIf @type('Person')": { "birthDate|@ ~$Date~": "1990-05-15" }
 ```
 
 ### `$additionalProperties` Scope
 - Root level: applies globally
-- Object level: applies only to that object (not recursive)
+- Object level: applies only to that object (not recursive, child objects keep the global setting)
+- Not inherited from a template included by object-level `$ref`
 - Default: `false` (unknown fields rejected)
+- `$sequence` follows the same model
 
 ```json
 {

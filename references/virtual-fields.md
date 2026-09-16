@@ -1,4 +1,4 @@
-# Okyline Virtual Fields — `$field`
+# Okyline Virtual Fields - `$field`
 
 Virtual fields are computed values that exist only during validation. Use them when conditional logic depends on a **derived value not present in the data**.
 
@@ -13,9 +13,9 @@ Virtual fields are computed values that exist only during validation. Use them w
   "$oky": {
     "order": {
       "$field tier": "%ComputeTier",
-      "total": 1500.00,
+      "total": "1500.00",
       "$appliedIf tier('GOLD')": {
-        "loyaltyBonus|@": 50.00
+        "loyaltyBonus|@": "50.00"
       }
     }
   },
@@ -29,10 +29,12 @@ Virtual fields are computed values that exist only during validation. Use them w
 
 - Value MUST reference a `$compute` expression (`%Name`)
 - Names MUST NOT collide with actual field names or `$appliedIf` payload fields
-- No forward references — a `$field` can only reference virtual fields declared **before** it
+- No forward references - a `$field` can only reference virtual fields declared **before** it
 - Declared at object level only, not inside `$appliedIf` payloads
-- **Scope:** local to the declaring object — not visible in children, not inherited via object-level `$ref`
-- **Restriction:** MUST NOT be used in existence-based directives (`$requiredIfExist`, etc.) — use `fieldName(null)` instead
+- **Scope:** local to the declaring object - not visible in child objects or list elements
+- **Inheritance:** a template's `$field`s are injected by object-level `$ref` together with its fields and rules; a local `$field` of the same name wins
+- **Restrictions:** MUST NOT be used in existence-based directives (`$requiredIfExist`, etc.) - use `fieldName(null)` instead; MUST NOT appear in the target list of `$requiredIf*` / `$forbiddenIf*` (it is not a data field)
+- A virtual field counts as declared for the load-time checks of conditional directives, and it has no declared type
 
 ## Chaining
 

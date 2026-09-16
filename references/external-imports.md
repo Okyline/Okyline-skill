@@ -2,13 +2,16 @@
 
 Cross-schema composition: depend on other contracts and import their named
 definitions. Only relevant when modularization or reuse across projects is
-explicitly required — otherwise keep everything inline in a single schema.
+explicitly required - otherwise keep everything inline in a single schema.
 
-Identity keys (`$id`, `$version`, `$state`) and multi-payload entries
-(`$entries`) are NOT specific to external imports — see SKILL.md Document
-Metadata.
+Identity keys (`$id`, `$version`, `$state`) and validation entry points
+(`$entries`) are NOT specific to external imports - see SKILL.md "Root keys"
+and `internal-references.md`. `$state` has three values: `"DRAFT"` (default),
+`"DRAFT-FINAL"` (still editable, but resolves its dependencies as a `FINAL`
+would) and `"FINAL"`; a contract binds only dependencies at least as strict as
+itself.
 
-## Dependencies — `$deps`
+## Dependencies - `$deps`
 
 ```json
 "$deps": {
@@ -24,7 +27,7 @@ Metadata.
 | `~1.3.0` | Same MAJOR.MINOR, any PATCH |
 | `^1.3.0` | Same MAJOR, any MINOR/PATCH |
 
-## External Imports — `$import`
+## External Imports - `$import`
 
 Map a local alias to a definition from a dependency. `$import` lives **inside
 the sub-block whose kind it imports**: `$defs` for type/object definitions,
@@ -51,10 +54,10 @@ Other kinds import the same way, each in its own sub-block:
 Once imported, aliases share the namespace of `$defs` and accept the full
 Annex D toolkit (`$ref`, `$override`, `$amend`, `$remove`).
 
-## Visibility — `$public` / `$private`
+## Visibility - `$public` / `$private`
 
 Per-sub-block (`$defs`, `$nomenclature`, `$format`, `$compute`). Controls
-what is exposable to external `$import` imports — mutually exclusive.
+what is exposable to external `$import` imports - mutually exclusive.
 
 ```json
 "$defs": {
@@ -71,12 +74,12 @@ what is exposable to external `$import` imports — mutually exclusive.
 | `$private: [...]` | Deny-list. Empty `[]` rejected (use absence). |
 
 Names are bare (no `&` sigil). Hidden entries appear absent to importers.
-Visibility is a barrier to **import**, not to runtime validation — an
+Visibility is a barrier to **import**, not to runtime validation - an
 exposed type can still internally use hidden helpers.
 
 ## Re-export through Alias Chains
 
-A `$import` alias is itself a valid import target — an intermediate library
+A `$import` alias is itself a valid import target - an intermediate library
 can re-export from its own deps. Applies to all four kinds. Cycles fail
 at load time. Re-exports respect the intermediate's visibility rules.
 
@@ -88,4 +91,4 @@ common.Address  ←  region.$import.Addr  ←  app imports &region.Addr
 
 - ✅ Explicit user request for modularization / shared library
 - ✅ User loads a schema that already declares `$deps` / `$import`
-- ❌ Default — keep everything inline in `$oky` + `$defs`
+- ❌ Default - keep everything inline in `$oky` + `$defs`

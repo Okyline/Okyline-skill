@@ -1,18 +1,18 @@
-# Okyline Internal References — `$defs` and `&Name`
+# Okyline Internal References - `$defs` and `&Name`
 
 ## Overview
 
 Okyline supports **internal schema references** to promote reuse and consistency. References allow reusing schema fragments defined in `$defs`.
 
 Two use cases:
-1. **Property-level reference** — a field whose value `&Name` (or `["&Name"]`) qualifies the field as having the type of the referenced definition
-2. **Object-level reference** — an object that includes all fields from another schema (inheritance), via the special key `$ref` inside the object
+1. **Property-level reference** - a field whose value `&Name` (or `["&Name"]`) qualifies the field as having the type of the referenced definition
+2. **Object-level reference** - an object that includes all fields from another schema (inheritance), via the special key `$ref` inside the object
 
 References are an **inclusion mechanism**: referenced schemas can be extended, overridden, or partially removed.
 
 ---
 
-## `$defs` — Definition Repository
+## `$defs` - Definition Repository
 
 `$defs` is a container for reusable schema fragments, placed at the root level like the name `$oky`.
 
@@ -56,7 +56,7 @@ References are an **inclusion mechanism**: referenced schemas can be extended, o
 ### Rules
 
 - `$defs` is optional
-- Entries are **not** JSON properties of validated instances — they are reusable definitions only
+- Entries are **not** JSON properties of validated instances - they are reusable definitions only
 - References target the **first level** of `$defs` only (no nested paths)
 
 ### Collection Definitions
@@ -75,7 +75,7 @@ The key of a `$defs` entry accepts the same constraint grammar as a field key (e
 
 ---
 
-## Reference Syntax — `&Name`
+## Reference Syntax - `&Name`
 
 Internal definitions are referenced via:
 
@@ -148,7 +148,7 @@ Array size constraints are added as standard structural constraints:
 "addresses|[1,10]": ["&Address"]
 ```
 
-A **map** field works the same way — a single-entry object whose value is a reference:
+A **map** field works the same way - a single-entry object whose value is a reference:
 
 ```json
 "statsByRegion|[*:*]": { "region-1": "&Stat" }
@@ -156,20 +156,20 @@ A **map** field works the same way — a single-entry object whose value is a re
 
 ### Polymorphic References
 
-A list or map field whose example holds **more than one** `&Name` (optionally mixed with inline values) is polymorphic — each element / value matches any of the variants:
+A list or map field whose example holds **more than one** `&Name` (optionally mixed with inline values) is polymorphic - each element / value matches any of the variants:
 
 ```json
 "events|@ [*]":       ["&Login", "&Logout"]
 "indicators|@ [*:*]": { "k1": "&Counter", "k2": "&Gauge" }
 ```
 
-All variants MUST be the same kind — all scalar **or** all object; mixing fails at load.
+All variants MUST be the same kind - all scalar **or** all object; mixing fails at load.
 
 ### Constraint Categories
 
 #### Structural Constraints (local, at usage)
 
-NOT inherited — defined at each usage point:
+NOT inherited - defined at each usage point:
 
 | Constraint | Description |
 |------------|-------------|
@@ -180,9 +180,11 @@ NOT inherited — defined at each usage point:
 | `%` | Default value |
 | Label | Field description |
 
+Exception: when the definition **is** a collection (`"Row|[*] -> (>=0)": [0]`), its bounds, `!` and `->` constraints belong to the type and travel with `&Row`.
+
 #### Value Constraints (inherited)
 
-Inherited from the referenced schema. Modified only via `$override`:
+Inherited from the referenced schema. Modified only via `$override` or `$amend`:
 
 | Constraint | Description |
 |------------|-------------|
@@ -214,7 +216,7 @@ Example:
 
 ---
 
-## Object-Level References — Inheritance
+## Object-Level References - Inheritance
 
 ### Basic Inclusion
 
@@ -251,8 +253,9 @@ Effective `Person`:
 ### Rules
 
 - Object-level `$ref` **MUST** target an **object schema** (not scalar)
-- Definitions containing conditional rules (`$requiredIf`, etc.) or `$compute` expressions **can be inherited** via object-level `$ref`, provided `$remove` is not used on that inclusion.
-- Object-level `$ref` targets **exactly one** template (single reference string, not an array).
+- Definitions containing conditional rules (`$requiredIf`, etc.), `$compute` expressions or `$field` virtual fields **can be inherited** via object-level `$ref`: those elements are injected together with the fields, provided `$remove` is not used on that inclusion.
+- A template's `$additionalProperties` and `$sequence` are **not** inherited: the including object keeps its own declaration or the global one.
+- Object-level `$ref` targets **exactly one** template (single reference string, not an array); one `$ref` key per object.
 
 ### Field Collision Rules
 
@@ -267,7 +270,7 @@ Effective `Person`:
 
 ---
 
-## `$remove` — Excluding Inherited Fields
+## `$remove` - Excluding Inherited Fields
 
 Exclude fields inherited from referenced schemas:
 
@@ -306,12 +309,12 @@ Effective schema:
 
 ---
 
-## `$override` and `$amend` — Adapting Inherited Fields
+## `$override` and `$amend` - Adapting Inherited Fields
 
 Two directives to adapt a field inherited from a template:
 
-- **`$override`** — replaces the field entirely. Unspecified blocks are **erased**.
-- **`$amend`** — replaces only the specified blocks. Unspecified blocks are **kept from the base**.
+- **`$override`** - replaces the field entirely. Unspecified blocks are **erased**.
+- **`$amend`** - replaces only the specified blocks. Unspecified blocks are **kept from the base**.
 
 Both preserve field type, collection nature and reference target (structural invariants).
 
@@ -333,7 +336,19 @@ Both preserve field type, collection nature and reference target (structural inv
 }
 ```
 
-Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?` and `{1,50}` are kept from the base. Using `$override @` instead would yield just `name|@` (everything else erased).
+Result: `name` becomes `@? {1,50}` - the `@` flag is added by `$amend`, the `?` and `{1,50}` are kept from the base. Using `$override @` instead would yield just `name|@` (everything else erased).
+
+### `$amend` on an object or a collection
+
+`$amend` adapts the **key** only. On an object or a collection field, its value is empty - `{}` for an object or a map, `[]` for a list - and everything the base carries is kept: fields, conditional rules, object settings. A child field or a conditional rule written under the adapter is a schema error. `$override` replaces the whole field, structure included.
+
+```json
+"address|$amend @": {}               // address becomes required; its fields and rules are the base's
+"lines|$amend [1,50]": []            // bounds adapted; element type and constraints from the base
+"address|$amend @": { "city|@": "Paris" }   // ❌ rejected: a child field under $amend
+```
+
+The same rule applies to `$amend` in an `$appliedIf` branch.
 
 ### Rules
 
@@ -346,10 +361,10 @@ Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?
 
 ## Order of Application
 
-1. **Reference injection** — Resolve the single `$ref`, inject all fields
-2. **Removals** — Apply `$remove`
-3. **Adaptations** — Apply `$override` and `$amend` via block-by-block merge
-4. **Local additions** — Add remaining local fields
+1. **Reference injection** - Resolve the single `$ref`, inject all fields
+2. **Removals** - Apply `$remove`
+3. **Adaptations** - Apply `$override` and `$amend` via block-by-block merge
+4. **Local additions** - Add remaining local fields
 
 ---
 
@@ -365,7 +380,9 @@ Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?
 | Local field collides with inherited (no `$override` or `$amend`) | Schema rejected |
 | Object-level cycle detected | Schema rejected |
 | Object-level `$ref` targets non-object schema | Schema rejected |
-| Object-level `$ref` targets definition with conditional rules | Schema rejected |
+| `$remove` on a template that carries conditional rules, `$compute` or `$field` | Schema rejected |
+| `$amend` on an object or collection with a non-empty value | Schema rejected |
+| Two `$ref` keys on the same object | Schema rejected |
 
 ---
 
@@ -386,11 +403,11 @@ Result: `name` becomes `@? {1,50}` — the `@` flag is added by `$amend`, the `?
 
 ---
 
-## Template Pattern — Object-Level `$ref` + `$override` in Array Elements
+## Template Pattern - Object-Level `$ref` + `$override` in Array Elements
 
 A powerful pattern for typed structures that share a common base but need per-usage specialization. The object-level `$ref` is placed inside the array element object, not on the array field itself.
 
-**Use case:** FHIR `Coding` — same structure everywhere, but `code` has different enum constraints per usage.
+**Use case:** FHIR `Coding` - same structure everywhere, but `code` has different enum constraints per usage.
 
 ```json
 {
@@ -414,19 +431,48 @@ A powerful pattern for typed structures that share a common base but need per-us
       "code|@ {1,50}|Code": "example",
       "display|{1,100}|Display": "Example"
     }
+  },
+  "$nomenclature": {
+    "MARITAL_STATUS": "M,S,D,W",
+    "GENDER": "male,female,other,unknown"
   }
 }
 ```
 
 **Key points:**
-- `system` and `display` inherited from `&Coding` — validated once, applied everywhere
+- `system` and `display` inherited from `&Coding` - validated once, applied everywhere
 - Only `code` is overridden per usage to add the specific enum constraint
-- The array field `coding|[*]` is a normal array — inheritance happens at element level
+- The array field `coding|[*]` is a normal array - inheritance happens at element level
 - Multiple fields can be overridden if needed
 
-**Property-level reference vs object-level `$ref` — when to use which:**
+**Property-level reference vs object-level `$ref` - when to use which:**
 
 | Pattern | Use when |
 |---------|----------|
-| `"period": "&Period"` | The field IS a Period — no specialization needed |
-| `{ "$ref": "&Coding", "code\|$override ...": ... }` | The object EXTENDS a base — needs per-usage specialization |
+| `"period": "&Period"` | The field IS a Period - no specialization needed |
+| `{ "$ref": "&Coding", "code\|$override ...": ... }` | The object EXTENDS a base - needs per-usage specialization |
+
+---
+
+## Validation Entry Points - `$entries`
+
+`$entries` (root level) declares additional validation targets within one schema: each entry maps a public name to a local definition, so a consumer can validate a payload against that definition instead of the root `$oky`.
+
+```json
+{
+  "$entries": {
+    "AnimalCreate": "&Animal",
+    "OrderCreate":  "&Order"
+  },
+  "$defs": {
+    "Animal": { "name|@ {2,50}": "Rex", "age|@ (0..50)": 3 },
+    "Order":  { "id|@ ~^ORD-[0-9]+$~": "ORD-1" }
+  },
+  "$oky": { "label|@ {1,100}": "Pet store API" }
+}
+```
+
+- Values are `&Name` references to local definitions (or imported aliases); the external form `&id.Name` is not allowed.
+- Without an entry name, validation targets `$oky`.
+- A library that only publishes definitions writes `"$oky": null` and is validated through its entries; `"$oky": {}` means something else, an object without declared fields that accepts anything.
+- Declare `$entries` only when consumers need to validate distinct payload shapes from the same contract.

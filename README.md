@@ -1,6 +1,6 @@
 # Okyline Skill for Claude
 
-A skill that turns Claude into an Okyline expert — able to create, edit, and convert [Okyline](https://github.com/Okyline/okyline-spec) schemas, a declarative, example-driven syntax for describing and validating JSON data.
+A skill that turns Claude into an Okyline expert - able to create, edit, and convert [Okyline](https://github.com/Okyline/okyline-spec) schemas, a declarative, example-driven syntax for describing and validating JSON data.
 
 ## Features
 
@@ -11,9 +11,11 @@ Full Okyline core language support:
 - Arrays and maps: size `[1,10]`, element validation `->`, uniqueness `!`, pattern keys
 - Custom formats `$format` and nomenclatures `$nomenclature`
 - Built-in formats: `$Email`, `$Date`, `$DateTime`...
-- Conditional directives `$appliedIf`, `$requiredIf`, `$forbiddenIf`...
-- Expression language for computed validations `$compute`
-- Reusable definitions with `$defs` and `$ref` (internal references)
+- Conditional directives `$appliedIf`, `$requiredIf`, `$forbiddenIf`... and the checks the engine runs when a schema loads
+- Expression language for computed validations `$compute`, exact decimal arithmetic
+- Reusable definitions with `$defs`, `&Name` references, `$ref` inclusion, `$override` / `$amend` adaptation, `$entries` validation entry points
+- Virtual fields `$field` for conditions on derived values
+- External imports `$deps` / `$import` for cross-schema composition
 
 ## Installation
 
@@ -56,7 +58,7 @@ You can also provide more context:
 - "Convert this JSON Schema to Okyline"
 - "Transform this Avro schema into Okyline format"
 
-For best results, provide a JSON example along with your existing validation rules or data specifications — Claude will translate them into Okyline constraints automatically.
+For best results, provide a JSON example along with your existing validation rules or data specifications - Claude will translate them into Okyline constraints automatically.
 
 Or ask questions about the language itself:
 
@@ -78,7 +80,8 @@ okyline-skill/
     ├── internal-references.md            # $defs and $ref usage
     ├── conditional-directives.md         # Conditional logic
     ├── expression-language.md            # $compute expressions
-    └── virtual-fields.md                 # $field virtual fields
+    ├── virtual-fields.md                 # $field virtual fields
+    └── external-imports.md               # $deps / $import (load only when needed)
 ```
 
 ## Example
